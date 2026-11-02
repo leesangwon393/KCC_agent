@@ -51,6 +51,13 @@ def redact(text):
     out=[REDACTED if INSTRUCTION.search(l) else l for l in text.split('\n')]
     return '\n'.join(out),sum(l==REDACTED for l in out)
 
+def _strings(x):
+    if isinstance(x,str):yield x
+    elif isinstance(x,dict):
+        for v in x.values():yield from _strings(v)
+    elif isinstance(x,list):
+        for v in x:yield from _strings(v)
+
 def norm(s):return re.sub(r'\s+',' ',s).strip()
 
 def score(query,doc):
@@ -65,7 +72,8 @@ class ToolHostV5:
     def file(self):return self.e.path(self.asset()['path'])
     def grounded_text(self):
         # Catalog search results are excluded: evidence must come from the file or related files.
-        return norm(' '.join(json.dumps(h['result'],ensure_ascii=False) for h in self.history if h['tool'] in ('inspect_file','read_content','find_related_files') and 'error' not in h['result']))
+        # Raw strings, not json.dumps: escaping turned " into \" and rejected verbatim quotes.
+        return norm(' '.join(_strings([h['result'] for h in self.history if h['tool'] in ('inspect_file','read_content','find_related_files') and 'error' not in h['result']])))
     def reads(self):return [h['result'] for h in self.history if h['tool']=='read_content' and 'error' not in h['result']]
     def support(self,pid,ev):
         """Projects the evidence points to: explicit id, a related file's owner, else unique top lexical match."""

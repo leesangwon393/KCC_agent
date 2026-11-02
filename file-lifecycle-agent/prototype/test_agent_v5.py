@@ -50,4 +50,8 @@ class V5(unittest.TestCase):
         h,t=host_for(self.ts,'injection');h.guards={'quote'};line=next(l for l in Path(h.file()).read_text().splitlines() if 'OVERRIDE' in l)
         run(h,script(A('inspect_file'),A('read_content',offset=0),A('assign_project',project_id='KCC_AGENT',evidence=line)),max_steps=3)
         self.assertEqual(h.assigned,'KCC_AGENT') if 'KCC_AGENT' in t['catalog'] else None
+    def test_quote_with_double_quotes_is_grounded(self):
+        h,t=host_for(self.ts,'semantic');Path(h.file()).write_text('메모\n'+t['catalog'][t['truth']['project']]['desc']+' "v2" 결과\n')
+        run(h,script(A('inspect_file'),A('read_content',offset=0),A('assign_project',project_id=t['truth']['project'],evidence=t['catalog'][t['truth']['project']]['desc']+' "v2" 결과')),max_steps=3)
+        self.assertEqual(h.assigned,t['truth']['project'])
 if __name__=='__main__':unittest.main()

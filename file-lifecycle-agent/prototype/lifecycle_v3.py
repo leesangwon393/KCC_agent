@@ -83,4 +83,6 @@ class Lifecycle:
         a=self.data['assets'][aid]; src=self.path(a['path']); dst=self.path(a['original'])
         if dst.exists(): raise FileExistsError(dst)
         if sha(src)!=a['hash']: raise ValueError('changed archive')
-        dst.parent.mkdir(parents=True,exist_ok=True); os.link(src,dst); src.unlink(); a['path']=a['original']; self.save()
+        dst.parent.mkdir(parents=True,exist_ok=True); os.link(src,dst); src.unlink()
+        # recover() only replays 'prepared' entries, so an 'undone' record is history only.
+        self.data['journal'].append({'asset':aid,'src':a['path'],'dst':a['original'],'hash':a['hash'],'state':'undone'}); a['path']=a['original']; self.save()

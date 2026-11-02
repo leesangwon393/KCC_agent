@@ -17,21 +17,29 @@ NATIVE_SYSTEM=SYSTEM.replace('Return JSON only: {"tool": name, "arguments": {}, 
 TASK='Organize the bound downloaded file. Pick the next tool.'
 
 class QwenToolController:
-    def __init__(self,model_path,thinking=False):
+    def __init__(self,model_path,thinking=False,specs=None,system=None,adapter=None):
         import torch
         from transformers import AutoTokenizer,AutoModelForCausalLM
         self.tok=AutoTokenizer.from_pretrained(model_path)
         self.model=AutoModelForCausalLM.from_pretrained(model_path,torch_dtype=torch.bfloat16,device_map='cuda').eval()
+        if adapter:
+            from peft import PeftModel
+            self.model=PeftModel.from_pretrained(self.model,adapter).eval()
         # Qwen3 hybrid thinking; Qwen2.5 templates ignore the flag.
+        self.specs=specs or SPECS;self.system=system or NATIVE_SYSTEM
         self.thinking=thinking;self.max_new_tokens=1536 if thinking else 128;self.usage=[];self.torch=torch
     def messages(self,obs):
-        m=[{'role':'system','content':NATIVE_SYSTEM},{'role':'user','content':TASK}]
-        for name,result in obs.items():  # dict keeps call order
-            m.append({'role':'assistant','content':'','tool_calls':[{'type':'function','function':{'name':name,'arguments':{}}}]})
-            m.append({'role':'tool','name':name,'content':json.dumps(result,ensure_ascii=False)})
+        m=[{'role':'system','content':self.system},{'role':'user','content':TASK}]
+        # v4 passes {tool: result}; v5 passes a history list with real arguments and errors.
+        hist=[{'tool':k,'arguments':{},'result':v} for k,v in obs.items()] if isinstance(obs,dict) else obs
+        for h in hist:
+            if h['tool'] is None:
+                m.append({'role':'assistant','content':h.get('raw','')});m.append({'role':'user','content':'Error: '+h['result']['error']});continue
+            m.append({'role':'assistant','content':'','tool_calls':[{'type':'function','function':{'name':h['tool'],'arguments':h['arguments']}}]})
+            m.append({'role':'tool','name':h['tool'],'content':json.dumps(h['result'],ensure_ascii=False)})
         return m
     def __call__(self,obs):
-        enc=self.tok.apply_chat_template(self.messages(obs),tools=SPECS,add_generation_prompt=True,enable_thinking=self.thinking,return_tensors='pt',return_dict=True).to('cuda')
+        enc=self.tok.apply_chat_template(self.messages(obs),tools=self.specs,add_generation_prompt=True,enable_thinking=self.thinking,return_tensors='pt',return_dict=True).to('cuda')
         ids=enc['input_ids'];t=time.monotonic()
         with self.torch.no_grad():out=self.model.generate(**enc,max_new_tokens=self.max_new_tokens,do_sample=False)
         text=self.tok.decode(out[0,ids.shape[1]:],skip_special_tokens=True)
@@ -46,7 +54,11 @@ def parse(text):
     try:call=json.loads(m.group(1))
     except json.JSONDecodeError:return {'invalid_output':text[:300]}
     reason=re.sub(r'<tool_call>.*?</tool_call>','',text,flags=re.S).strip()[:200] or 'native tool call'
-    return {'tool':call.get('name'),'arguments':call.get('arguments',{}),'reason':reason}
+    args=call.get('arguments',{})
+    if isinstance(args,str):
+        try:args=json.loads(args)
+        except json.JSONDecodeError:pass
+    return {'tool':call.get('name'),'arguments':args,'reason':reason}
 
 if __name__=='__main__':
     assert parse('<tool_call>\n{"name": "inspect_file", "arguments": {}}\n</tool_call>')=={'tool':'inspect_file','arguments':{},'reason':'native tool call'}

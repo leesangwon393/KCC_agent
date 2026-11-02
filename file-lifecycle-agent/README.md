@@ -72,6 +72,42 @@
 - 사고 모드는 가장 정확하지만 11배 느리고, 가드와 함께는 아직 평가하지 않았습니다.
 - 합성 데이터와 greedy decoding이므로 실제 정확도가 아니라 같은 작업 위에서 controller를 비교한 결과입니다.
 
+## 데모 앱
+
+```sh
+python prototype/demo_v5.py                    # http://localhost:8765, 규칙 controller (GPU 불필요)
+python prototype/demo_v5.py --qwen <hf_model_dir> --port 8765   # GPU 서버, ssh -L 8765:localhost:8765 로 접속
+```
+
+- 처음 실행하면 `demo_workspace/`에 8가지 상황(명시 id, 의미, 모호, 근거 없음, 참조된 가중치, 고아 가중치, 긴 문서, 주입)의 데모 폴더를 만듭니다. 초기화 버튼은 데모가 만든 폴더만 지웁니다.
+- 파일마다 **판단 근거**(도구가 실제로 돌려준 사실만으로 구성: 근거 문장의 위치, 관련 파일과 그 프로젝트, 참조 관계, 프로젝트 상태, 결론), 에이전트 실행 과정(단계별 도구 호출과 결과), 계획을 보여 줍니다.
+- 상단 대시보드: 유지 권장 / 보관 권장 / 확인 필요 / 보관됨 개수와 필터, 파일명·프로젝트 검색, 보관 권장 일괄 승인.
+- 승인한 것만 실행기가 옮깁니다. 화면에 보인 계획과 현재 상태가 다르면 `stale plan`으로 거절하고, 되돌리기는 저널에 기록됩니다.
+- 인증이 없으므로 127.0.0.1에서만 띄웁니다.
+
+## 수집 데이터와 검증 (`data_collect/`)
+
+평가셋이 템플릿 생성이라는 약점을 보완하려고 Claude Code 에이전트로 데이터 팀(4명, 각 25개)과 검증 팀(3명, 관점별)을 구성해 100개 사례를 만들고 검증했습니다. 재사용용 에이전트 정의는 `.claude/agents/case-collector.md`, `case-verifier.md`입니다.
+
+| 관점 | keep | fix | drop |
+|---|---|---|---|
+| 정답 재라벨링 (답을 보지 않고) | 85 | 13 | 2 |
+| 현실성·중복·누출 | 73 | 24 | 3 |
+| 정책·안전 | 76 | 23 | 1 |
+| **세 관점 모두 keep** | **53** | | |
+
+- 정답 경로를 실제 호스트에 넣어 보면 100개 중 94개가 받아들여집니다. 거절된 6개는 모두 "단일 프로젝트" 검사(어휘 일치)가 영어·복합어 근거를 거절한 경우입니다.
+- 합성 120개에서 120/120이던 규칙 controller가 수집 100개에서는 78/100입니다. 규칙이 생성기에 맞춰져 있었다는 뜻입니다.
+- 검증 팀이 호스트 버그를 찾았습니다. 근거에 큰따옴표가 있으면 JSON 이스케이프 때문에 정확한 인용도 거절되던 문제를 고쳤습니다(`test_quote_with_double_quotes_is_grounded`).
+- 형식은 `data_collect/CASE_SCHEMA.md`, 기계 검사와 eval 작업 변환은 `prototype/case_check.py`, 자세한 결과는 `data_collect/VERIFY_REPORT.md`에 있습니다.
+
+## 소형 모델 파인튜닝 (진행 중)
+
+- `prototype/make_sft.py`: 정답 경로를 실제 호스트에 재생해 관찰까지 그대로 담은 학습 예시를 만듭니다. 수집 사례 48개(검증 통과 53개 중 27개는 평가용으로 분리, 라벨 이의·drop·호스트 거절 제외) + 합성 dev 69개 = 117개 경로, 684턴입니다. test 프로젝트와 평가용 수집 사례는 학습에 쓰지 않습니다.
+- `prototype/train_lora.py`: Qwen3-1.7B LoRA(r=16), 추론과 같은 chat template·도구·`enable_thinking=False`로 렌더링하고 도구 호출 부분에만 loss를 겁니다.
+- `eval_v5.py --cases=sft/split.json`으로 평가용 수집 27개를, 기본 모드로 합성 120개(test 51개 별도 집계)를 평가합니다. 모델 인자에 `경로+어댑터경로`로 LoRA를 붙입니다.
+- 서버 실행 순서는 `scripts/finetune_after_ablation.sh`. 결과는 나오는 대로 추가합니다.
+
 ## 실행
 
 ```sh
@@ -81,6 +117,8 @@ python prototype/eval_agent_runtime.py qwen3_8b=<hf_model_dir> qwen3_8b_think=<h
 python prototype/test_agent_v5.py               # v5 안전장치·가드 테스트
 python prototype/eval_v5.py [--no-guards | --guards=quote,instruction,support,read_through,redact] [--label=x] [qwen3_8b=<hf_model_dir>]   # v5 120개 작업
 sh scripts/ablate.sh                            # 가드를 하나씩 끈 ablation 6개 설정 (서버)
+python prototype/case_check.py data_collect/batch_*.json   # 수집 사례 기계 검사
+python prototype/eval_v5.py --cases=sft/split.json         # 수집 사례 평가 (규칙 controller)
 ```
 
 `qwen_tool_controller.py`는 Qwen 공식 tool template(`tools=`, `<tool_call>`)을 사용하며, 관찰 기록을 assistant tool_calls와 tool 메시지로 재구성합니다. 이름이 `_think`로 끝나면 Qwen3 thinking 모드가 켜집니다.
