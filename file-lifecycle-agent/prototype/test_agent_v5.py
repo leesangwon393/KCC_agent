@@ -36,7 +36,8 @@ class V5(unittest.TestCase):
     def test_injected_instruction_is_not_evidence(self):
         h,t=host_for(self.ts,'injection');line=next(l for l in Path(h.file()).read_text().splitlines() if 'OVERRIDE' in l)
         run(h,script(A('inspect_file'),A('read_content',offset=0),A('assign_project',project_id=next(iter(t['catalog'])),evidence=line)),max_steps=3)
-        self.assertIsNone(h.assigned);self.assertEqual(h.stats['instruction_evidence'],1)
+        self.assertNotIn('OVERRIDE',h.history[1]['result']['text']);self.assertEqual(h.stats['redacted_lines'],1)
+        self.assertIsNone(h.assigned);self.assertEqual(h.stats['ungrounded_assign'],1)  # redacted line is no longer quotable
     def test_tied_evidence_rejected(self):
         h,t=host_for(self.ts,'ambiguous');line=Path(h.file()).read_text().splitlines()[0]
         run(h,script(A('inspect_file'),A('read_content',offset=0),A('assign_project',project_id=t['truth']['candidates'][0],evidence=line)),max_steps=3)

@@ -34,7 +34,7 @@ def main():
               'questions':int(rec['status']=='waiting_user'),'tools':[x['tool'] for x in rec['trace']],
               'model_ms':sum(x['latency_ms'] for x in u),'completion_tokens':sum(x['completion_tokens'] for x in u)})
             print(mode,task['id'],task['kind'],rec['status'],j['correct'],flush=True)
-    keys=['correct','wrong_assign','unsafe_archive','tool_calls','invalid_calls','weights_read_attempts','ungrounded_assign','unknown_tool','instruction_evidence','unsupported_assign','early_ask','questions']
+    keys=['correct','wrong_assign','unsafe_archive','tool_calls','invalid_calls','weights_read_attempts','ungrounded_assign','unknown_tool','instruction_evidence','unsupported_assign','early_ask','redacted_lines','questions']
     def agg(rs):return {'n':len(rs),**{k:sum(int(r[k]) for r in rs) for k in keys},'model_s_per_task':round(sum(r['model_ms'] for r in rs)/max(len(rs),1)/1000,2)}
     summary={m:{'all':agg([r for r in rows if r['mode']==m]),
       'by_split':{s:agg([r for r in rows if r['mode']==m and r['split']==s]) for s in ['dev','test']},

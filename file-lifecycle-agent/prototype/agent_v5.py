@@ -43,6 +43,12 @@ def validate(name,args):
         if not isinstance(v,t) or (t is int and isinstance(v,bool)):raise ToolError(f'{k} must be {props[k]["type"]}')
         if t is list and not all(isinstance(x,str) for x in v):raise ToolError(f'{k} items must be strings')
 
+REDACTED='[host removed an instruction-like line from untrusted content]'
+def redact(text):
+    """Drop instruction-like lines so the model never sees them; returns (text, removed count)."""
+    out=[REDACTED if INSTRUCTION.search(l) else l for l in text.split('\n')]
+    return '\n'.join(out),sum(l==REDACTED for l in out)
+
 def norm(s):return re.sub(r'\s+',' ',s).strip()
 
 def score(query,doc):
@@ -51,7 +57,7 @@ def score(query,doc):
 
 class ToolHostV5:
     def __init__(self,engine,aid,catalog,guards=True):
-        self.guards=guards;self.e=engine;self.aid=aid;self.catalog=catalog;self.history=[];self.stats={'weights_read_attempts':0,'ungrounded_assign':0,'unknown_tool':0,'instruction_evidence':0,'unsupported_assign':0,'early_ask':0}
+        self.guards=guards;self.e=engine;self.aid=aid;self.catalog=catalog;self.history=[];self.stats={'weights_read_attempts':0,'ungrounded_assign':0,'unknown_tool':0,'instruction_evidence':0,'unsupported_assign':0,'early_ask':0,'redacted_lines':0}
         self.assigned=None;self.refs_checked=False;self.plan=None
     def asset(self):return self.e.data['assets'][self.aid]
     def file(self):return self.e.path(self.asset()['path'])
@@ -79,7 +85,11 @@ class ToolHostV5:
                 self.stats['weights_read_attempts']+=suffix in WEIGHTS;raise ToolError('content route prohibited for this file type')
             text=p.read_text(errors='replace');off=args.get('offset',0)
             if not 0<=off<max(len(text),1):raise ToolError('offset out of range')
-            end=off+CHUNK;r={'offset':off,'text':text[off:end],'truncated':end<len(text),'next_offset':end if end<len(text) else None}
+            end=off+CHUNK;chunk=text[off:end]
+            if self.guards:
+                # shortcut: redaction is per chunk, so an instruction split across a chunk boundary may slip through; redact the whole file first if that matters.
+                chunk,n=redact(chunk);self.stats['redacted_lines']+=n
+            r={'offset':off,'text':chunk,'truncated':end<len(text),'next_offset':end if end<len(text) else None}
             if self.guards and r['truncated']:r['note']=f'more text remains: call read_content with offset={end} before searching or asking'
             return r
         if name=='search_projects':
@@ -93,6 +103,7 @@ class ToolHostV5:
             for a in self.e.data['assets'].values():
                 if a['id']==self.aid or Path(a['path']).suffix.lower() not in TEXT:continue
                 lines=[l for l in self.e.path(a['path']).read_text(errors='replace').splitlines() if q in l.lower()]
+                if self.guards:lines=[l for l in lines if not INSTRUCTION.search(l)]
                 if lines:out.append({'path':a['path'],'project_id':a['project'],'project_status':self.e.data['projects'].get(a['project']),'matching_lines':lines[:3]})
             return {'files':out}
         if name=='assign_project':
