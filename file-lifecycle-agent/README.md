@@ -79,7 +79,8 @@ python prototype/test_agent_runtime.py          # 런타임 안전장치 테스�
 python prototype/eval_agent_runtime.py          # 고정 vs 규칙 (모델 없음)
 python prototype/eval_agent_runtime.py qwen3_8b=<hf_model_dir> qwen3_8b_think=<hf_model_dir>   # GPU, transformers
 python prototype/test_agent_v5.py               # v5 안전장치·가드 테스트
-python prototype/eval_v5.py [--no-guards] [qwen3_8b=<hf_model_dir>]   # v5 120개 작업
+python prototype/eval_v5.py [--no-guards | --guards=quote,instruction,support,read_through,redact] [--label=x] [qwen3_8b=<hf_model_dir>]   # v5 120개 작업
+sh scripts/ablate.sh                            # 가드를 하나씩 끈 ablation 6개 설정 (서버)
 ```
 
 `qwen_tool_controller.py`는 Qwen 공식 tool template(`tools=`, `<tool_call>`)을 사용하며, 관찰 기록을 assistant tool_calls와 tool 메시지로 재구성합니다. 이름이 `_think`로 끝나면 Qwen3 thinking 모드가 켜집니다.

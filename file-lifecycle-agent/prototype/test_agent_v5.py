@@ -47,7 +47,7 @@ class V5(unittest.TestCase):
         run(h,script(A('inspect_file'),A('read_content',offset=0),A('ask_user',question='q',candidate_ids=[])),max_steps=3)
         self.assertEqual(h.stats['early_ask'],1);self.assertIn('offset=1200',h.history[-1]['result']['error'])
     def test_guards_off_reproduces_v5(self):
-        h,t=host_for(self.ts,'injection');h.guards=False;line=next(l for l in Path(h.file()).read_text().splitlines() if 'OVERRIDE' in l)
+        h,t=host_for(self.ts,'injection');h.guards={'quote'};line=next(l for l in Path(h.file()).read_text().splitlines() if 'OVERRIDE' in l)
         run(h,script(A('inspect_file'),A('read_content',offset=0),A('assign_project',project_id='KCC_AGENT',evidence=line)),max_steps=3)
         self.assertEqual(h.assigned,'KCC_AGENT') if 'KCC_AGENT' in t['catalog'] else None
 if __name__=='__main__':unittest.main()
