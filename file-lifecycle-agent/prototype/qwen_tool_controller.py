@@ -21,7 +21,9 @@ class QwenToolController:
         import torch
         from transformers import AutoTokenizer,AutoModelForCausalLM
         self.tok=AutoTokenizer.from_pretrained(model_path)
-        self.model=AutoModelForCausalLM.from_pretrained(model_path,torch_dtype=torch.bfloat16,device_map='cuda').eval()
+        # CUDA on the GPU server, Apple GPU (MPS) on a Mac laptop, CPU otherwise.
+        self.device='cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+        self.model=AutoModelForCausalLM.from_pretrained(model_path,torch_dtype=torch.bfloat16,device_map=self.device).eval()
         if adapter:
             from peft import PeftModel
             self.model=PeftModel.from_pretrained(self.model,adapter).eval()
@@ -39,7 +41,7 @@ class QwenToolController:
             m.append({'role':'tool','name':h['tool'],'content':json.dumps(h['result'],ensure_ascii=False)})
         return m
     def __call__(self,obs):
-        enc=self.tok.apply_chat_template(self.messages(obs),tools=self.specs,add_generation_prompt=True,enable_thinking=self.thinking,return_tensors='pt',return_dict=True).to('cuda')
+        enc=self.tok.apply_chat_template(self.messages(obs),tools=self.specs,add_generation_prompt=True,enable_thinking=self.thinking,return_tensors='pt',return_dict=True).to(self.device)
         ids=enc['input_ids'];t=time.monotonic()
         with self.torch.no_grad():out=self.model.generate(**enc,max_new_tokens=self.max_new_tokens,do_sample=False)
         text=self.tok.decode(out[0,ids.shape[1]:],skip_special_tokens=True)

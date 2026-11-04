@@ -7,6 +7,22 @@ from lifecycle_v3 import tokens
 SYSTEM=(Path(__file__).parent/'agent_specs/system_v5.md').read_text()
 WEIGHTS={'.pt','.pth','.bin','.ckpt','.safetensors'}
 TEXT={'.txt','.md','.csv','.yaml','.json','.py'}
+IMAGE={'.png','.jpg','.jpeg','.heic'}  # screenshots: read through macOS Vision OCR, then handled like text
+OCR_BIN=Path(__file__).parent/'bin/ocr'  # built from ocr.swift: swiftc -O ocr.swift -o bin/ocr
+_ocr_cache={}
+
+def content(p):
+    """Text of a readable file; images are OCR'd once per (path, mtime)."""
+    p=Path(p)
+    if p.suffix.lower() not in IMAGE:return p.read_text(errors='replace')
+    key=(str(p),p.stat().st_mtime_ns)
+    if key not in _ocr_cache:
+        import subprocess
+        try:r=subprocess.run([str(OCR_BIN),str(p)],capture_output=True,text=True,timeout=60)
+        except (OSError,subprocess.TimeoutExpired) as e:raise ToolError(f'OCR unavailable: {e}')
+        if r.returncode:raise ToolError('OCR failed: '+r.stderr[:200])
+        _ocr_cache[key]='\n'.join(row['text'] for row in json.loads(r.stdout))
+    return _ocr_cache[key]
 CHUNK=1200
 # Host guards, individually switchable for ablation. 'quote' is the original v5 grounding check.
 GUARDS=('quote','instruction','support','read_through','redact')
@@ -87,13 +103,13 @@ class ToolHostV5:
         validate(name,args);done={h['tool'] for h in self.history if 'error' not in h['result']}
         p=self.file();suffix=p.suffix.lower()
         if name=='inspect_file':
-            route='weights' if suffix in WEIGHTS else 'text' if suffix in TEXT else 'unsupported'
-            return {'name':p.name,'suffix':suffix,'route':route,'bytes':p.stat().st_size}
+            route='weights' if suffix in WEIGHTS else 'text' if suffix in TEXT|IMAGE else 'unsupported'
+            return {'name':p.name,'suffix':suffix,'route':route,'bytes':p.stat().st_size,**({'source':'ocr'} if suffix in IMAGE else {})}
         if name=='read_content':
             if 'inspect_file' not in done:raise ToolError('inspect_file first')
-            if suffix not in TEXT:
+            if suffix not in TEXT|IMAGE:
                 self.stats['weights_read_attempts']+=suffix in WEIGHTS;raise ToolError('content route prohibited for this file type')
-            text=p.read_text(errors='replace');off=args.get('offset',0)
+            text=content(p);off=args.get('offset',0)
             if not 0<=off<max(len(text),1):raise ToolError('offset out of range')
             end=off+CHUNK;chunk=text[off:end]
             if 'redact' in self.guards:
@@ -140,9 +156,10 @@ class ToolHostV5:
             bad=[c for c in args['candidate_ids'] if c not in self.catalog]
             if bad:raise ToolError(f'unknown candidate ids {bad}')
             if not args['question'].strip():raise ToolError('empty question')
-            if 'read_through' in self.guards and Path(self.file()).suffix.lower() in TEXT:
+            if 'read_through' in self.guards and Path(self.file()).suffix.lower() in TEXT|IMAGE:
                 rs=self.reads()
-                if not rs or (rs[-1]['truncated'] and len(rs)<MAX_PAGES):
+                unreadable=not rs and any(h['tool']=='read_content' and 'OCR' in h['result'].get('error','') for h in self.history)
+                if not unreadable and (not rs or (rs[-1]['truncated'] and len(rs)<MAX_PAGES)):
                     self.stats['early_ask']+=1;raise ToolError('read the file through first: '+('call read_content' if not rs else f'call read_content with offset={rs[-1]["next_offset"]}'))
             return {'status':'waiting_user','candidate_ids':args['candidate_ids']}
         if name=='preview_plan':
@@ -194,7 +211,9 @@ def rule_controller(hist):
         return act('ask_user',question='이 가중치는 어느 프로젝트 것인가요?',candidate_ids=sorted(pids))
     if info['route']!='text':return act('ask_user',question='지원하지 않는 형식입니다. 어느 프로젝트 자료인가요?',candidate_ids=[])
     reads=[h['result'] for h in hist if h['tool']=='read_content' and 'error' not in h['result']]
-    if not reads:return act('read_content',offset=0)
+    if not reads:
+        if any(h['tool']=='read_content' for h in hist):return act('ask_user',question='파일을 읽지 못했습니다. 어느 프로젝트 자료인가요?',candidate_ids=[])
+        return act('read_content',offset=0)
     text=''.join(r['text'] for r in reads)
     m=re.search(r'project_id:\s*([A-Z0-9_]+)',text)
     if m:return act('assign_project',project_id=m.group(1),evidence=m.group(0))

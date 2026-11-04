@@ -54,4 +54,11 @@ class V5(unittest.TestCase):
         h,t=host_for(self.ts,'semantic');Path(h.file()).write_text('메모\n'+t['catalog'][t['truth']['project']]['desc']+' "v2" 결과\n')
         run(h,script(A('inspect_file'),A('read_content',offset=0),A('assign_project',project_id=t['truth']['project'],evidence=t['catalog'][t['truth']['project']]['desc']+' "v2" 결과')),max_steps=3)
         self.assertEqual(h.assigned,t['truth']['project'])
+    def test_screenshot_without_ocr_asks_user(self):
+        import agent_v5
+        h,t=host_for(self.ts,'semantic');Lc=h.e;img=Path(Lc.root)/'shot.png';img.write_bytes(b'png')
+        aid=Lc.ingest('shot.png');h=ToolHostV5(Lc,aid,t['catalog']);old=agent_v5.OCR_BIN;agent_v5.OCR_BIN=Path('/nonexistent/ocr')
+        try:r=run(h,rule_controller)
+        finally:agent_v5.OCR_BIN=old
+        self.assertEqual(h.history[0]['result']['source'],'ocr');self.assertIn('OCR unavailable',h.history[1]['result']['error']);self.assertEqual(r['status'],'waiting_user')
 if __name__=='__main__':unittest.main()

@@ -101,12 +101,51 @@ python prototype/demo_v5.py --qwen <hf_model_dir> --port 8765   # GPU 서버, ss
 - 검증 팀이 호스트 버그를 찾았습니다. 근거에 큰따옴표가 있으면 JSON 이스케이프 때문에 정확한 인용도 거절되던 문제를 고쳤습니다(`test_quote_with_double_quotes_is_grounded`).
 - 형식은 `data_collect/CASE_SCHEMA.md`, 기계 검사와 eval 작업 변환은 `prototype/case_check.py`, 자세한 결과는 `data_collect/VERIFY_REPORT.md`에 있습니다.
 
-## 소형 모델 파인튜닝 (진행 중)
+## 소형 모델 파인튜닝
 
 - `prototype/make_sft.py`: 정답 경로를 실제 호스트에 재생해 관찰까지 그대로 담은 학습 예시를 만듭니다. 수집 사례 48개(검증 통과 53개 중 27개는 평가용으로 분리, 라벨 이의·drop·호스트 거절 제외) + 합성 dev 69개 = 117개 경로, 684턴입니다. test 프로젝트와 평가용 수집 사례는 학습에 쓰지 않습니다.
-- `prototype/train_lora.py`: Qwen3-1.7B LoRA(r=16), 추론과 같은 chat template·도구·`enable_thinking=False`로 렌더링하고 도구 호출 부분에만 loss를 겁니다.
-- `eval_v5.py --cases=sft/split.json`으로 평가용 수집 27개를, 기본 모드로 합성 120개(test 51개 별도 집계)를 평가합니다. 모델 인자에 `경로+어댑터경로`로 LoRA를 붙입니다.
-- 서버 실행 순서는 `scripts/finetune_after_ablation.sh`. 결과는 나오는 대로 추가합니다.
+- `prototype/train_lora.py`: LoRA(r=16), 추론과 같은 chat template·도구·`enable_thinking=False`로 렌더링하고 도구 호출 부분의 logits만 계산해 loss를 겁니다. `--qlora`는 8B를 4비트로 올려 24GB GPU에서 학습합니다.
+- 서버 실행 순서: `scripts/finetune_after_ablation.sh`, `scripts/finetune_8b_qlora.sh`. 1.7B LoRA 학습 13분, 8B QLoRA 41분(RTX A5000).
+
+| 모델 | 합성 test 51 (학습 안 한 프로젝트) | 수집 평가 27 | 잘못 지정 / 위험 보관 (수집) |
+|---|---|---|---|
+| 규칙 controller | 51/51 | 19/27 | 0 / 0 |
+| Qwen3-1.7B (학습 전) | 24/51 | 12/27 | 1 / 0 |
+| **Qwen3-1.7B + LoRA** | **51/51** | **17/27** | 1 / 1 |
+| Qwen3-8B (학습 전) | 48/51 | 17/27 | 2 / 1 |
+
+- 1.7B는 학습으로 8B(학습 전)와 같은 수준이 됐고, 노트북(Apple M5, MPS)에서 도구 호출 한 번에 약 1.1~1.4초로 돌아갑니다.
+- 합성 test는 생성기가 같아 학습 분포와 가깝습니다. 수집 27개가 더 정직한 지표입니다.
+
+### Tool calling 평가 (`prototype/tool_eval.py`)
+
+저장된 trace만으로 호출 단위·경로 단위 지표를 계산합니다. 결과: `results/finetune/tool_calling_*.json`.
+
+| 지표 (수집 평가 27) | 1.7B 학습 전 | 1.7B + LoRA | 8B 학습 전 |
+|---|---|---|---|
+| 호스트가 받아들인 호출 비율 | 76.9% | 99.3% | 96.7% |
+| 같은 호출 반복 | 37 | 0 | 0 |
+| 형식 오류 / 스키마 오류 / 순서 오류 | 2 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 |
+| 근거 검사 거절 | 2 | 1 | 5 |
+| 오류 후 다음 호출이 성공한 비율 | 7/48 | 1/1 | 5/5 |
+| 12단계 안에 끝냄 | 23/27 | 27/27 | 27/27 |
+| 텍스트는 읽고 판단 / 가중치는 관련 파일 탐색 | 25/25, 2/2 | 25/25, 2/2 | 25/25, 2/2 |
+| 지정한 프로젝트가 정답 | 5/6 | 9/10 | 8/10 |
+| 질문 후보가 정답과 일치 | 7/10 | 8/13 | 7/13 |
+
+- 학습 전 1.7B의 실패는 대부분 같은 호출 반복이었고, LoRA가 이를 없앴습니다. 학습 후 호출 형식·순서는 거의 완벽합니다.
+- 남은 실패는 도구 호출이 아니라 판단 문제입니다. 모호한 파일에서 프로젝트 검색(어휘 일치)이 후보를 못 찾아 빈 후보로 질문하거나, 근거 검사가 맞는 근거를 거절해 질문으로 빠집니다.
+
+## 트리거 (자동 감지)
+
+```sh
+python prototype/demo_v5.py --watch                      # demo_workspace/downloads, screenshots 감시
+python prototype/demo_v5.py --watch --inbox ~/Desktop    # 바탕화면 새 스크린샷을 복사해 와서 분석 (원본은 그대로)
+```
+
+- 새 파일이 생기고 크기가 멈추면 등록 → 분석 → macOS 알림. 데모 화면은 자동으로 새로고침되고 "자동 감지" 태그가 붙습니다.
+- 스크린샷(.png/.jpg/.heic)은 macOS Vision OCR(`prototype/ocr.swift`, `swiftc -O ocr.swift -o bin/ocr`)로 글자를 뽑아 텍스트처럼 처리합니다. OCR이 실패하면 반복하지 않고 사용자에게 묻습니다.
+- 노트북 실행: `--qwen <Qwen3-1.7B 경로> --adapter <LoRA 경로>`. MPS를 자동으로 씁니다.
 
 ## 실행
 
@@ -119,6 +158,7 @@ python prototype/eval_v5.py [--no-guards | --guards=quote,instruction,support,re
 sh scripts/ablate.sh                            # 가드를 하나씩 끈 ablation 6개 설정 (서버)
 python prototype/case_check.py data_collect/batch_*.json   # 수집 사례 기계 검사
 python prototype/eval_v5.py --cases=sft/split.json         # 수집 사례 평가 (규칙 controller)
+python prototype/tool_eval.py [--split=test] <experiment_dir> ...   # tool calling 지표
 ```
 
 `qwen_tool_controller.py`는 Qwen 공식 tool template(`tools=`, `<tool_call>`)을 사용하며, 관찰 기록을 assistant tool_calls와 tool 메시지로 재구성합니다. 이름이 `_think`로 끝나면 Qwen3 thinking 모드가 켜집니다.
