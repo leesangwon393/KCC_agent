@@ -1,12 +1,14 @@
 """v5 demo: agent proposes, user approves, executor moves, undo restores.
 usage: python demo_v5.py [--root DIR] [--port 8765] [--qwen /path/to/Qwen3-8B]
+Trigger: --watch analyzes new files in <root>/downloads and <root>/screenshots and sends a macOS notification;
+add --inbox ~/Desktop to copy new screenshots in (originals are never moved). Images need bin/ocr: swiftc -O ocr.swift -o bin/ocr
 Without --qwen the deterministic rule controller drives the same tools (no GPU needed).
 On the GPU server run with --qwen and open it through `ssh -L 8765:localhost:8765 ...`."""
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import argparse, json, random, shutil, time
+import argparse, json, random, shutil, subprocess, threading, time
 from lifecycle_v3 import Lifecycle
-from agent_v5 import ToolHostV5, run, rule_controller, TEXT, CHUNK
+from agent_v5 import ToolHostV5, run, rule_controller, content, TEXT, IMAGE, WEIGHTS, CHUNK
 from tasks_v5 import CATALOG, SHARED, FILLER, INJECT, NOISE_TEXT
 
 HERE = Path(__file__).resolve().parent
@@ -49,11 +51,73 @@ def seed(root):
     e.save()
 
 
+PARTIAL = {'.crdownload', '.download', '.part', '.tmp'}
+WATCH_DIRS = ['downloads', 'screenshots']  # inside the demo root; the executor never leaves the root
+
+
+def notify(title, text):
+    # argv, not string interpolation: file names are untrusted.
+    subprocess.run(['osascript', '-e', 'on run argv', '-e', 'display notification (item 2 of argv) with title (item 1 of argv)',
+                    '-e', 'end run', title, text], capture_output=True, timeout=10)
+
+
+class Watcher(threading.Thread):
+    """Trigger: a new file in a watched folder is ingested and analyzed, then the user is notified.
+    --inbox folders (e.g. ~/Desktop for screenshots) are copied in, never moved: user originals stay untouched."""
+    def __init__(self, demo, inboxes, interval=2.0):
+        super().__init__(daemon=True); self.d = demo; self.inboxes = [Path(x).expanduser() for x in inboxes]; self.interval = interval
+        self.sizes = {}
+        self.seen = {p for x in self.inboxes for p in x.glob('*')}  # only files that appear after start
+
+    def candidates(self):
+        for x in self.inboxes:
+            for p in x.glob('*'):
+                if p not in self.seen and p.is_file() and not p.name.startswith('.') and p.suffix.lower() in TEXT | IMAGE | WEIGHTS:
+                    yield p, self.d.root / 'screenshots' / p.name
+        for sub in WATCH_DIRS:
+            for p in (self.d.root / sub).glob('*'):
+                if p.is_file() and not p.name.startswith('.'): yield p, None
+
+    def stable(self, p):
+        # Wait until the size stops changing (downloads and screenshots are written in pieces).
+        n = p.stat().st_size; prev = self.sizes.get(p); self.sizes[p] = n
+        return prev == n and n > 0 and p.suffix.lower() not in PARTIAL
+
+    def tick(self):
+        known = {a['original'] for a in self.d.engine().data['assets'].values()}
+        for p, copy_to in list(self.candidates()):
+            if not self.stable(p): continue
+            if copy_to:
+                self.seen.add(p)
+                if p.stat().st_size > 50 << 20 or copy_to.exists(): continue  # shortcut: skips >50MB and name clashes
+                copy_to.parent.mkdir(exist_ok=True); shutil.copy2(p, copy_to); continue  # analyzed on the next tick
+            rel = str(p.relative_to(self.d.root))
+            if rel in known: continue
+            with self.d.lock:
+                aid = self.d.engine().ingest(rel)
+                try: r = self.d.analyze(aid); r['trigger'] = 'watch'; self.d.save_runs()
+                except Exception as exc: r = {'status': f'error: {exc}', 'project': None}
+                a = self.d.engine().data['assets'][aid]; plan = self.d.engine().plan(aid) if a['project'] else None
+                text = (f'{r["project"]} 자료 · ' + {'archive': '보관 권장', 'keep': '유지 권장', 'defer': '보류'}[plan['action']]) if plan \
+                    else '어느 프로젝트인지 확인이 필요해요' if r['status'] == 'waiting_user' else str(r['status'])
+                self.d.events.append({'path': rel, 'text': text}); self.d.events = self.d.events[-20:]; self.d.version += 1
+            notify(f'새 파일: {p.name}', text)
+
+    def run(self):
+        for sub in WATCH_DIRS: (self.d.root / sub).mkdir(exist_ok=True)
+        while True:
+            try: self.tick()
+            except Exception as exc: print('watcher:', exc, flush=True)
+            time.sleep(self.interval)
+
+
 class Demo:
     def __init__(self, root, controller, name):
         self.root = Path(root); self.ctl = controller; self.name = name
         self.runs_path = self.root / 'agent_runs.json'
         self.runs = json.loads(self.runs_path.read_text()) if self.runs_path.exists() else {}
+        self.lock = threading.Lock()  # HTTP handler and watcher share the manifest and the model
+        self.version = 0; self.events = []; self.watching = False  # watcher activity the page polls for
 
     def engine(self): return Lifecycle(self.root)
     def save_runs(self): self.runs_path.write_text(json.dumps(self.runs, ensure_ascii=False, indent=1))
@@ -116,7 +180,7 @@ def explain(e, a, r, plan):
     out, full = [], {h['tool']: h for h in r.get('full', [])}
     ev = r.get('evidence')
     if ev:
-        text = e.path(a['path']).read_text(errors='replace') if Path(a['path']).suffix.lower() in TEXT else ''
+        text = content(e.path(a['path'])) if Path(a['path']).suffix.lower() in TEXT | IMAGE else ''
         line = next((i for i, l in enumerate(text.splitlines(), 1) if ev in l), None)
         if line:
             pos = text.find(ev); page = pos // CHUNK + 1
@@ -164,27 +228,30 @@ def serve(demo, port):
         def do_GET(self):
             if self.path == '/':
                 self.send_response(200); self.send_header('Content-Type', 'text/html; charset=utf-8'); self.end_headers(); self.wfile.write(page)
-            elif self.path == '/api/state': self.reply(demo.state())
+            elif self.path == '/api/state':
+                with demo.lock: self.reply(demo.state())
+            elif self.path == '/api/events': self.reply({'version': demo.version, 'events': demo.events, 'watch': demo.watching})
             else: self.send_error(404)
 
         def do_POST(self):
             try:
                 d = json.loads(self.rfile.read(int(self.headers.get('Content-Length') or 0)) or b'{}')
                 aid = d.get('id')
-                if self.path == '/api/analyze': out = demo.analyze(aid)
-                elif self.path == '/api/answer': out = demo.answer(aid, d.get('project_id'))
-                elif self.path == '/api/keep': out = demo.keep(aid)
-                elif self.path == '/api/approve': out = demo.approve(aid, d.get('plan'))
-                elif self.path == '/api/undo': out = demo.undo(aid)
-                elif self.path == '/api/reset': seed(demo.root); demo.runs = {}; out = 'reset'
-                else: return self.send_error(404)
+                with demo.lock:
+                    if self.path == '/api/analyze': out = demo.analyze(aid)
+                    elif self.path == '/api/answer': out = demo.answer(aid, d.get('project_id'))
+                    elif self.path == '/api/keep': out = demo.keep(aid)
+                    elif self.path == '/api/approve': out = demo.approve(aid, d.get('plan'))
+                    elif self.path == '/api/undo': out = demo.undo(aid)
+                    elif self.path == '/api/reset': seed(demo.root); demo.runs = {}; demo.events = []; out = 'reset'
+                    else: return self.send_error(404)
                 self.reply({'ok': True, 'result': out})
             except Exception as exc:
                 self.reply({'ok': False, 'error': f'{type(exc).__name__}: {exc}'}, 400)
 
         def log_message(self, *a): pass
 
-    # Single-threaded on purpose: the manifest is a JSON file without locking.
+    # Single-threaded server; demo.lock serializes it with the watcher thread (manifest is a JSON file without locking).
     print(f'http://localhost:{port}  ({demo.name}, {demo.root})', flush=True)
     HTTPServer(('127.0.0.1', port), H).serve_forever()
 
@@ -194,12 +261,17 @@ if __name__ == '__main__':
     ap.add_argument('--root', default=str(HERE.parent / 'demo_workspace'))
     ap.add_argument('--port', type=int, default=8765)
     ap.add_argument('--qwen', help='HF model dir; omit to use the rule controller')
+    ap.add_argument('--adapter', help='LoRA adapter dir for --qwen')
+    ap.add_argument('--watch', action='store_true', help='trigger: analyze new files in <root>/downloads and <root>/screenshots')
+    ap.add_argument('--inbox', action='append', default=[], help='with --watch: copy new files from this folder in (e.g. ~/Desktop for screenshots)')
     a = ap.parse_args()
     if not (Path(a.root) / 'manifest.json').exists(): seed(a.root)
     if a.qwen:
         from qwen_tool_controller import QwenToolController
         from agent_v5 import SPECS, SYSTEM
-        ctl, name = QwenToolController(a.qwen, specs=SPECS, system=SYSTEM), 'Qwen3 native tool calling: ' + Path(a.qwen).name
+        ctl, name = QwenToolController(a.qwen, specs=SPECS, system=SYSTEM, adapter=a.adapter), 'Qwen3 native tool calling: ' + Path(a.qwen).name
     else:
         ctl, name = rule_controller, '규칙 controller (GPU 없이 실행)'
-    serve(Demo(a.root, ctl, name), a.port)
+    demo = Demo(a.root, ctl, name); demo.watching = a.watch
+    if a.watch: Watcher(demo, a.inbox).start()
+    serve(demo, a.port)
