@@ -146,7 +146,7 @@ class Demo:
         self.runs[aid] = {
             'status': rec['status'], 'project': host.assigned, 'steps': rec['steps'], 'errors': rec['invalid_calls'],
             'seconds': round(rec['elapsed_ms'] / 1000, 1),
-            'evidence': assign and assign['arguments']['evidence'],
+            'evidence': assign and assign['result'].get('evidence', assign['arguments']['evidence']),
             'question': ask and ask['arguments']['question'], 'candidates': ask and ask['arguments']['candidate_ids'],
             'trace': [{'tool': h['tool'], 'arguments': h['arguments'],
                        'result': h['result'].get('error') and ('오류: ' + h['result']['error']) or _brief(h['result'])}

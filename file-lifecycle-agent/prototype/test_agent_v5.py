@@ -61,4 +61,31 @@ class V5(unittest.TestCase):
         try:r=run(h,rule_controller)
         finally:agent_v5.OCR_BIN=old
         self.assertEqual(h.history[0]['result']['source'],'ocr');self.assertIn('OCR unavailable',h.history[1]['result']['error']);self.assertEqual(r['status'],'waiting_user')
+    def test_fuzzy_quote_snaps_to_source_line(self):
+        h,t=host_for(self.ts,'semantic');pid=t['truth']['project'];line=t['catalog'][pid]['desc']+' 실험을 다시 돌렸다.'
+        Path(h.file()).write_text('메모\n'+line+'\n')
+        run(h,script(A('inspect_file'),A('read_content',offset=0),A('assign_project',project_id=pid,evidence=line.replace('다시 ','다시  ').rstrip('.')+'!')),max_steps=3)
+        self.assertEqual(h.assigned,pid);self.assertEqual(h.history[-1]['result']['evidence'],line);self.assertEqual(h.stats['snapped_quotes'],1)
+    def test_stopword_only_overlap_does_not_support(self):
+        h,t=host_for(self.ts,'semantic');pid=next(iter(t['catalog']))
+        cat={pid:{'name':'선박 데이터 파일','desc':'x'},'OTHER':{'name':'음성 인식','desc':'y'}}
+        self.assertEqual(ToolHostV5(h.e,h.aid,cat).support(pid,'공유 파일 데이터 목록'),[])
+        self.assertEqual(ToolHostV5(h.e,h.aid,cat,guards={'quote'}).support(pid,'공유 파일 데이터 목록'),[pid])
+    def test_safetensors_metadata_in_inspect(self):
+        import json,struct
+        h,t=host_for(self.ts,'semantic');p=Path(h.e.root)/'w.safetensors';hdr=json.dumps({'__metadata__':{'run':'sar_ship_yolo_v3'}}).encode()
+        p.write_bytes(struct.pack('<Q',len(hdr))+hdr+b'\0'*16);aid=h.e.ingest('w.safetensors')
+        r=ToolHostV5(h.e,aid,t['catalog']).call('inspect_file',{})
+        self.assertEqual(r['metadata'],{'run':'sar_ship_yolo_v3'});self.assertEqual(r['route'],'weights')
+    def test_shared_weights_need_ask(self):
+        import tempfile
+        d=Path(tempfile.mkdtemp());e=Lifecycle(d);e.data['projects'].update(A1='active',B1='active')
+        for rel,pid in [('a/cfg.yaml','A1'),('b/cfg.yaml','B1')]:
+            (d/rel).parent.mkdir(parents=True,exist_ok=True);(d/rel).write_text(('model: yolov8s.pt' if pid=='A1' else 'detector: weights/yolov8s.pt')+f'\nproject: {pid}\n');e.data['assets'][e.ingest(rel)].update(project=pid,refs=['yolov8s.pt'])
+        (d/'yolov8s.pt').write_bytes(b'\0'*64);aid=e.ingest('yolov8s.pt');e.save()
+        cat={'A1':{'name':'a','desc':'a'},'B1':{'name':'b','desc':'b'}}
+        for guards,expect in [(True,None),({'quote'},'A1')]:
+            h=ToolHostV5(Lifecycle(d),aid,cat,guards=guards)
+            run(h,script(A('inspect_file'),A('find_related_files',query='yolov8s.pt'),A('assign_project',project_id='A1',evidence='model: yolov8s.pt')),max_steps=3)
+            self.assertEqual(h.assigned,expect)
 if __name__=='__main__':unittest.main()
