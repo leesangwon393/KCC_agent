@@ -1,7 +1,8 @@
 """Build SFT trajectories for the v5 tool-calling agent from gold labels.
 Each trajectory is replayed through the real ToolHostV5, so observations are exactly what the model sees at inference.
 Outputs sft/split.json (train/eval case ids) and sft/train.jsonl (one example per assistant turn).
-usage: python make_sft.py [OUT_DIR]"""
+usage: python make_sft.py [OUT_DIR] [--dense] [--pad]
+--pad adds a copy of every training case with its catalog padded to 8-20 projects (expand_catalog.pad, training-batch distractors)."""
 from pathlib import Path
 import json, sys, re, tempfile, collections
 from lifecycle_v3 import Lifecycle
@@ -74,25 +75,34 @@ def examples(history):
         yield {'messages': QwenToolController.messages(shim, history[:k]), 'call': {'name': h['tool'], 'arguments': h['arguments']}}
 
 
-def main(out, guards=True):
+def main(out, guards=True, padded=False):
     out = Path(out); out.mkdir(parents=True, exist_ok=True)
     cases, V = load_cases(); tr, ev = split(cases, V)
     stats = collections.Counter(); rows = []
     with tempfile.TemporaryDirectory() as t:
-        for i in tr:
-            c = cases[i]; task = build_case(c, Path(t) / 'c')
+        if padded:
+            import random
+            from expand_catalog import train_pool, pad
+            pool = train_pool(); grow = lambda cat, key: pad(cat, random.Random(key).randint(8, 20), pool, random.Random(key))
+        variants = [(i, cases[i]) for i in tr] + ([(i + '-pad', dict(cases[i], id=i + '-pad', catalog=grow(cases[i]['catalog'], i))) for i in tr] if padded else [])
+        for i, c in variants:
+            task = build_case(c, Path(t) / 'c')
             hist = oracle(task, c['gold'], task['catalog'], guards)
-            stats['collected_ok' if hist else 'collected_rejected'] += 1
+            stats[('padded_' if i.endswith('-pad') else 'collected_') + ('ok' if hist else 'rejected')] += 1
             if hist: rows += [dict(e, source=i) for e in examples(hist)]
         # Synthetic dev split only; the test split stays held out. Gold evidence = the rule baseline's accepted quote.
+        synth_pad = {x['id']: x for x in build_synth(Path(t) / 's-pad')} if padded else {}
         for task in build_synth(Path(t) / 's'):
             if task['split'] != 'dev': continue
             h = ToolHostV5(Lifecycle(task['dir']), task['asset'], task['catalog']); rec = run(h, rule_controller)
             ev_ = next((x['arguments']['evidence'] for x in rec['trace'] if x['tool'] == 'assign_project' and 'error' not in x['result']), None)
             gold = {'status': task['truth']['status'], 'project': task['truth']['project'], 'evidence': ev_, 'candidates': task['truth']['candidates'] or []}
-            task2 = dict(task); hist = oracle(task2, gold, task['catalog'], guards) if rec['status'] == task['truth']['status'] else None
-            stats['synthetic_ok' if hist else 'synthetic_rejected'] += 1
-            if hist: rows += [dict(e, source=f'synth-{task["id"]}') for e in examples(hist)]
+            if rec['status'] != task['truth']['status']: stats['synthetic_rejected'] += 1; continue
+            for tag, cat in [('', task['catalog'])] + ([('-pad', grow(task['catalog'], f'synth-{task["id"]}'))] if padded else []):
+                # fresh sandbox for the padded copy: the first oracle run already assigned and planned in this one
+                hist = oracle(synth_pad[task['id']] if tag else task, gold, cat, guards)
+                stats[f'synthetic{tag}_' + ('ok' if hist else 'rejected')] += 1
+                if hist: rows += [dict(e, source=f'synth-{task["id"]}{tag}') for e in examples(hist)]
     (out / 'split.json').write_text(json.dumps({'train': tr, 'eval': ev}, indent=1))
     with open(out / 'train.jsonl', 'w') as f:
         for r in rows: f.write(json.dumps(r, ensure_ascii=False) + '\n')
@@ -103,5 +113,5 @@ def main(out, guards=True):
 if __name__ == '__main__':
     # --dense: observations come from the bge-m3 search the model will see at inference (scores are cosines, not counts).
     from agent_v5 import DEFAULT_GUARDS
-    args = [a for a in sys.argv[1:] if a != '--dense']
-    main(args[0] if args else R / 'sft', set(DEFAULT_GUARDS) | {'dense'} if '--dense' in sys.argv else True)
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    main(args[0] if args else R / 'sft', set(DEFAULT_GUARDS) | {'dense'} if '--dense' in sys.argv else True, '--pad' in sys.argv)
