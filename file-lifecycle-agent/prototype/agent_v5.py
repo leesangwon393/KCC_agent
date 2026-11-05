@@ -170,9 +170,10 @@ class ToolHostV5:
                 ids=list(self.catalog);ds=dense_scores(args['query'],[self.catalog[k]['name']+' '+self.catalog[k]['desc'] for k in ids])
                 hits=sorted(((round(s,3),pid) for s,pid in zip(ds,ids)),key=lambda x:(-x[0],x[1]))
                 # Cosines hide ties, so mark every project within DENSE_MARGIN of the top one (the same margin support() needs to single one out).
-                close=[pid for s,pid in hits if hits[0][0]-s<DENSE_MARGIN] if len(hits)>1 else []
+                # Capped at the top 3: in a 15-project catalog cosines bunch up and an uncapped flag marked 6-15 projects.
+                close=[pid for s,pid in hits[:3] if hits[0][0]-s<DENSE_MARGIN]
                 close=close if len(close)>1 else []
-                return {'candidates':[{'project_id':pid,'name':self.catalog[pid]['name'],'desc':self.catalog[pid]['desc'],'score':s,**({'close':True} if pid in close else {})} for s,pid in hits[:max(3,len(close))]]}
+                return {'candidates':[{'project_id':pid,'name':self.catalog[pid]['name'],'desc':self.catalog[pid]['desc'],'score':s,**({'close':True} if pid in close else {})} for s,pid in hits[:3]]}
             hits=sorted(((score(args['query'],c['name']+' '+c['desc'],'stopwords' in self.guards),pid) for pid,c in self.catalog.items()),key=lambda x:(-x[0],x[1]))
             return {'candidates':[{'project_id':pid,'name':self.catalog[pid]['name'],'desc':self.catalog[pid]['desc'],'score':s} for s,pid in hits[:3] if s>0]}
         if name=='find_related_files':

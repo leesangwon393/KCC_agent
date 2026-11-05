@@ -45,13 +45,22 @@
   "run": "v5_20261104_202428_t_hybrid_17lora_dense"
  },
  {
-  "config": "hybrid: rule -> 1.7B close",
+  "config": "hybrid: rule -> 1.7B close (uncapped flag)",
   "catalog_projects": 3,
   "all75": 59,
   "clean66": 52,
   "wrong_assign_clean": 2,
   "unsafe_archive_clean": 0,
   "run": "v5_20261104_212303_t_hybrid_close_17"
+ },
+ {
+  "config": "hybrid: rule -> 1.7B pad (top-3 flag, padded training)",
+  "catalog_projects": 3,
+  "all75": 59,
+  "clean66": 52,
+  "wrong_assign_clean": 4,
+  "unsafe_archive_clean": 0,
+  "run": "v5_20261105_164444_t_hybrid_pad_17"
  },
  {
   "config": "rule",
@@ -63,12 +72,30 @@
   "run": "v5_20261105_141052_x15_rule"
  },
  {
-  "config": "hybrid: rule -> 1.7B close",
+  "config": "hybrid: rule -> 1.7B close (uncapped flag)",
   "catalog_projects": 15,
   "all75": 43,
   "clean66": 38,
   "wrong_assign_clean": 2,
   "unsafe_archive_clean": 0,
   "run": "v5_20261105_141040_x15_hybrid_close"
+ },
+ {
+  "config": "hybrid: rule -> 1.7B close (top-3 flag)",
+  "catalog_projects": 15,
+  "all75": 47,
+  "clean66": 42,
+  "wrong_assign_clean": 2,
+  "unsafe_archive_clean": 0,
+  "run": "v5_20261105_165316_x15_hybrid_close_cap"
+ },
+ {
+  "config": "hybrid: rule -> 1.7B pad (top-3 flag, padded training)",
+  "catalog_projects": 15,
+  "all75": 47,
+  "clean66": 42,
+  "wrong_assign_clean": 4,
+  "unsafe_archive_clean": 0,
+  "run": "v5_20261105_163628_x15_hybrid_pad"
  }
 ]

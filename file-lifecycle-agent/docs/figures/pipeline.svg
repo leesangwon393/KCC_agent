@@ -1,0 +1,166 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1520" height="700" viewBox="0 0 1520 700">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>
+<rect width="100%" height="100%" fill="#fff"/>
+<rect x="16" y="16" width="238" height="456" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="30" y="40" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" fill="#1f2328" text-anchor="start">(a)  Trigger</text>
+<rect x="36" y="54" width="198" height="50" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="135.0" y="75.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">Browser download</text>
+<text x="135.0" y="92.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">~/Downloads</text>
+<rect x="36" y="116" width="198" height="50" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="135.0" y="137.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">Mac screenshot</text>
+<text x="135.0" y="154.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">⌘⇧4 → ~/Desktop</text>
+<rect x="36" y="178" width="198" height="50" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="135.0" y="199.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">iPhone screenshot</text>
+<text x="135.0" y="216.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">Back Tap → iCloud inbox</text>
+<rect x="26" y="46" width="218" height="196" rx="8" fill="none" stroke="#afb8c1" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="143" y="260" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="start" font-style="italic">new file detected</text>
+<line x1="135" y1="242" x2="135" y2="268" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="32" y="272" width="206" height="110" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="135.0" y="299.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">File watcher</text>
+<text x="135.0" y="316.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">polls every 2 s</text>
+<text x="135.0" y="331.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">waits for a stable size</text>
+<text x="135.0" y="347.05" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">skips partial downloads</text>
+<text x="135.0" y="362.575" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">copies in; original untouched</text>
+<line x1="135" y1="382" x2="135" y2="416" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="32" y="416" width="206" height="44" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="135.0" y="434.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">Lifecycle manifest</text>
+<text x="135.0" y="451.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#59636e" text-anchor="middle">register asset (id, path)</text>
+<rect x="272" y="16" width="222" height="456" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="286" y="40" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" fill="#1f2328" text-anchor="start">(b)  Inspect &amp; route</text>
+<path d="M 238 438 C 258 438, 258 76, 282 76" fill="none" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="282" y="52" width="196" height="48" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="380.0" y="72.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">inspect_file</text>
+<text x="380.0" y="89.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">type, size, route</text>
+<rect x="306" y="136" width="172" height="84" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="392.0" y="166.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">text</text>
+<text x="392.0" y="183.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">read_content (chunks)</text>
+<text x="392.0" y="198.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">instruction lines redacted</text>
+<line x1="292" y1="178" x2="306" y2="178" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="306" y="244" width="172" height="84" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="392.0" y="274.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">image</text>
+<text x="392.0" y="291.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">macOS Vision OCR</text>
+<text x="392.0" y="306.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">→ handled as text</text>
+<line x1="292" y1="286" x2="306" y2="286" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="306" y="352" width="172" height="84" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="392.0" y="382.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">weights</text>
+<text x="392.0" y="399.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">never read; metadata only</text>
+<text x="392.0" y="414.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">find_related_files</text>
+<line x1="292" y1="394" x2="306" y2="394" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<line x1="292" y1="100" x2="292" y2="394" stroke="#1f2328" stroke-width="1.4"/>
+<rect x="512" y="16" width="600" height="456" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="526" y="40" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" fill="#1f2328" text-anchor="start">(c)  Agent loop: one tool call per turn, ≤ 12 calls</text>
+<line x1="494" y1="240" x2="528" y2="240" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="528" y="52" width="252" height="404" rx="8" fill="#fff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="654" y="74" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Hybrid controller</text>
+<rect x="544" y="88" width="220" height="70" rx="6" fill="#eef2f7" stroke="#8c959f" stroke-width="1.2"/>
+<text x="654.0" y="111.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">Rule controller</text>
+<text x="654.0" y="128.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">explicit ids, lexical match,</text>
+<text x="654.0" y="143.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">related-file owners</text>
+<polygon points="654,174 724,200 654,226 584,200" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="654" y="204" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="bold" fill="#1f2328" text-anchor="middle">plan reached?</text>
+<line x1="654" y1="158" x2="654" y2="174" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<line x1="654" y1="226" x2="654" y2="262" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<text x="694.0" y="248.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#59636e" text-anchor="middle" font-style="italic">no → restart</text>
+<rect x="544" y="262" width="220" height="92" rx="6" fill="#dbeafe" stroke="#2563eb" stroke-width="1.2"/>
+<text x="654.0" y="288.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">Qwen3-1.7B + LoRA</text>
+<text x="654.0" y="305.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">native tool calling</text>
+<text x="654.0" y="320.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">reads, quotes evidence,</text>
+<text x="654.0" y="336.05" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">writes search queries</text>
+<path d="M 724 200 L 796 200 L 796 47 L 1124 47 L 1124 86 L 1146 86" fill="none" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<text x="1000" y="42" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#59636e" text-anchor="middle" font-style="italic">yes: rule decision kept, model not called</text>
+<text x="746" y="194" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#59636e" text-anchor="middle" font-style="italic">yes</text>
+<rect x="812" y="52" width="284" height="404" rx="8" fill="#fff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="954" y="74" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Tool host (validates every call)</text>
+<rect x="826" y="86" width="120" height="196" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="886" y="104" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="bold" fill="#1f2328" text-anchor="middle">tools</text>
+<text x="886" y="124.0" font-family="Menlo, Consolas, monospace" font-size="10.5" font-weight="normal" fill="#1f2328" text-anchor="middle">inspect_file</text>
+<text x="886" y="141.5" font-family="Menlo, Consolas, monospace" font-size="10.5" font-weight="normal" fill="#1f2328" text-anchor="middle">read_content</text>
+<text x="886" y="159.0" font-family="Menlo, Consolas, monospace" font-size="10.5" font-weight="normal" fill="#1f2328" text-anchor="middle">search_projects</text>
+<text x="886" y="176.5" font-family="Menlo, Consolas, monospace" font-size="10.5" font-weight="normal" fill="#1f2328" text-anchor="middle">find_related_files</text>
+<text x="886" y="194.0" font-family="Menlo, Consolas, monospace" font-size="10.5" font-weight="normal" fill="#1f2328" text-anchor="middle">assign_project</text>
+<text x="886" y="211.5" font-family="Menlo, Consolas, monospace" font-size="10.5" font-weight="normal" fill="#1f2328" text-anchor="middle">check_references</text>
+<text x="886" y="229.0" font-family="Menlo, Consolas, monospace" font-size="10.5" font-weight="normal" fill="#1f2328" text-anchor="middle">preview_plan</text>
+<text x="886" y="246.5" font-family="Menlo, Consolas, monospace" font-size="10.5" font-weight="normal" fill="#1f2328" text-anchor="middle">ask_user</text>
+<text x="886" y="264.0" font-family="Menlo, Consolas, monospace" font-size="10.5" font-weight="normal" fill="#1f2328" text-anchor="middle">finish</text>
+<rect x="956" y="86" width="126" height="92" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="1019.0" y="112.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">Search</text>
+<text x="1019.0" y="129.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">bge-m3 dense, top-3</text>
+<text x="1019.0" y="143.175" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">&quot;close&quot; flag when</text>
+<text x="1019.0" y="157.35" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">within margin 0.10</text>
+<rect x="826" y="292" width="256" height="152" rx="6" fill="#fde7d9" stroke="#c2410c" stroke-width="1.2"/>
+<text x="954" y="312" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="12.5" font-weight="bold" fill="#1f2328" text-anchor="middle">Guards (error → fed back)</text>
+<text x="840" y="334.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#1f2328" text-anchor="start">• evidence must be an exact quote</text>
+<text x="840" y="351.5" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#1f2328" text-anchor="start">• quote must single out one project</text>
+<text x="840" y="369.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#1f2328" text-anchor="start">• no instructions from file content</text>
+<text x="840" y="386.5" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#1f2328" text-anchor="start">• read the whole text before asking</text>
+<text x="840" y="404.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#1f2328" text-anchor="start">• shared weights → ask</text>
+<text x="840" y="421.5" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#1f2328" text-anchor="start">• repeated / malformed call rejected</text>
+<text x="1016" y="140" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="10" font-weight="normal" fill="#1f2328" text-anchor="middle"></text>
+<line x1="764" y1="300" x2="826" y2="300" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<text x="795.0" y="293.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#59636e" text-anchor="middle" font-style="italic">call</text>
+<line x1="826" y1="336" x2="764" y2="336" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<text x="795.0" y="353.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#59636e" text-anchor="middle" font-style="italic">result</text>
+<line x1="956" y1="190" x2="1082" y2="190" stroke="#fff"/>
+<rect x="956" y="190" width="126" height="92" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="1019.0" y="216.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">Untrusted text</text>
+<text x="1019.0" y="233.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">redacted, then</text>
+<text x="1019.0" y="247.175" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">quoted only from</text>
+<text x="1019.0" y="261.35" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="10.5" font-weight="normal" fill="#59636e" text-anchor="middle">what was read</text>
+<rect x="1130" y="16" width="374" height="456" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="1144" y="40" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" fill="#1f2328" text-anchor="start">(d)  Decision, approval, execution</text>
+<line x1="1096" y1="150" x2="1146" y2="108" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<line x1="1096" y1="330" x2="1146" y2="244" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="1146" y="56" width="342" height="100" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="1317.0" y="86.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">planned</text>
+<text x="1317.0" y="103.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">project + quoted evidence</text>
+<text x="1317.0" y="118.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">plan: move / archive / keep</text>
+<text x="1317.0" y="134.05" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">archive only for completed projects</text>
+<rect x="1146" y="190" width="342" height="92" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="1317.0" y="224.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">waiting_user</text>
+<text x="1317.0" y="241.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">question + candidate projects</text>
+<text x="1317.0" y="256.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">(e.g. projects flagged &quot;close&quot;)</text>
+<path d="M 1488 106 L 1497 106 L 1497 344 L 1488 344" fill="none" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<line x1="1317" y1="282" x2="1317" y2="316" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="1146" y="316" width="342" height="56" rx="6" fill="#dcfce7" stroke="#15803d" stroke-width="1.2"/>
+<text x="1317.0" y="340.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">macOS notification + web UI</text>
+<text x="1317.0" y="357.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">user approves, or answers the question</text>
+<line x1="1317" y1="372" x2="1317" y2="400" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="1146" y="400" width="342" height="58" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="1317.0" y="425.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">Executor (after approval only)</text>
+<text x="1317.0" y="442.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">move / archive, journaled, one-click undo</text>
+<rect x="16" y="490" width="1488" height="190" rx="10" fill="#fafafa" stroke="#d0d7de" stroke-width="1.2" stroke-dasharray="6 4"/>
+<text x="30" y="514" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" fill="#1f2328" text-anchor="start">(e)  Offline: data, fine-tuning, evaluation</text>
+<rect x="36" y="528" width="248" height="100" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="160.0" y="558.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">Case collectors</text>
+<text x="160.0" y="575.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">LLM agents write one target file,</text>
+<text x="160.0" y="590.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">folder context, project catalog,</text>
+<text x="160.0" y="606.05" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">gold label + evidence</text>
+<line x1="284" y1="578" x2="300" y2="578" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="300" y="528" width="248" height="100" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="424.0" y="558.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">Three verifiers</text>
+<text x="424.0" y="575.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">label / realism / policy lenses</text>
+<text x="424.0" y="590.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">keep · fix · drop per case</text>
+<text x="424.0" y="606.05" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">held-out test set kept apart</text>
+<line x1="548" y1="578" x2="564" y2="578" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="564" y="528" width="248" height="100" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="688.0" y="558.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">Oracle trajectories</text>
+<text x="688.0" y="575.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">gold path replayed through</text>
+<text x="688.0" y="590.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">the real tool host;</text>
+<text x="688.0" y="606.05" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">catalog padded to 8–20 projects</text>
+<line x1="812" y1="578" x2="852" y2="578" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)"/>
+<rect x="852" y="528" width="248" height="100" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="976.0" y="558.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">LoRA SFT</text>
+<text x="976.0" y="575.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">loss on the tool call only</text>
+<text x="976.0" y="590.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">1,358 turns, rank 16</text>
+<text x="976.0" y="606.05" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">RTX A5000, ~30 min</text>
+<rect x="1140" y="528" width="348" height="100" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2"/>
+<text x="1314.0" y="558.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" fill="#1f2328" text-anchor="middle">Held-out evaluation</text>
+<text x="1314.0" y="575.0" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">75 test cases (66 clean),</text>
+<text x="1314.0" y="590.525" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">3- and 15-project catalogs;</text>
+<text x="1314.0" y="606.05" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" fill="#59636e" text-anchor="middle">accuracy, wrong assigns, tool metrics</text>
+<line x1="1100" y1="578" x2="1140" y2="578" stroke="#1f2328" stroke-width="1.4" marker-end="url(#ah)" stroke-dasharray="4 3"/>
+<text x="860" y="508" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#2563eb" text-anchor="middle" font-style="italic">LoRA adapter</text>
+<path d="M 976 528 C 976 490, 700 500, 700 356" fill="none" stroke="#2563eb" stroke-width="1.4" marker-end="url(#ah)" stroke-dasharray="5 4"/>
+<text x="1314" y="664" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="11" font-weight="normal" fill="#59636e" text-anchor="middle" font-style="italic">test batches are never used for training</text>
+</svg>
