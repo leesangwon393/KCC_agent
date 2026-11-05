@@ -1,11 +1,12 @@
 """v5 evaluation: 120 tasks, rule baseline vs native Qwen tool-calling controllers.
-usage: eval_v5.py [--no-guards | --guards=a,b] [--label=x] [--cases=split.json[:eval]] [--no-rule] [name=/path/to/hf_model[+/path/to/lora_adapter] ...]
+usage: eval_v5.py [--no-guards | --guards=a,b] [--label=x] [--cases=split.json[:eval]] [--no-rule] [--hybrid] [name=/path/to/hf_model[+/path/to/lora_adapter] ...]
+--hybrid: each model mode runs the rule first and takes over only when the rule does not reach a plan (run_hybrid).
 --cases evaluates collected cases (data_collect/batch_*.json, ids from the split file) instead of the 120 synthetic tasks.
 (--no-guards reproduces the first v5 run; --guards= with an empty list turns every check off, including exact-quote grounding)   (name ending in _think enables Qwen3 thinking)"""
 import json,sys,time,collections
 from pathlib import Path
 from lifecycle_v3 import Lifecycle
-from agent_v5 import ToolHostV5,run,rule_controller,SPECS,SYSTEM,GUARDS,DEFAULT_GUARDS
+from agent_v5 import ToolHostV5,run,run_hybrid,rule_controller,SPECS,SYSTEM,GUARDS,DEFAULT_GUARDS
 from tasks_v5 import build
 
 def build_cases(spec,root):
@@ -38,12 +39,14 @@ def main():
     for mode,ctl in modes:
         tasks=build_cases(opts['--cases'],out/'tasks'/mode) if '--cases' in opts else build(out/'tasks'/mode)  # fresh sandboxes per controller
         for task in tasks:
-            e=Lifecycle(task['dir']);h=ToolHostV5(e,task['asset'],task['catalog'],guards=guards)
-            rec=run(h,ctl,Path(task['dir'])/'trace.json');j=judge(task,rec,h)
+            e=Lifecycle(task['dir']);mk=lambda g:ToolHostV5(e,task['asset'],task['catalog'],guards=g)
+            if '--hybrid' in opts and mode!='rule':rec,h=run_hybrid(mk,ctl,guards,Path(task['dir'])/'trace.json')
+            else:h=mk(guards);rec=run(h,ctl,Path(task['dir'])/'trace.json')
+            j=judge(task,rec,h)
             u=rec['model_usage']
             rows.append({'mode':mode,'id':task['id'],'kind':task['kind'],'split':task['split'],'expected':task['truth'],'status':rec['status'],**j,
               'tool_calls':sum(1 for x in rec['trace'] if x['tool']),'invalid_calls':rec['invalid_calls'],**rec['stats'],
-              'questions':int(rec['status']=='waiting_user'),'tools':[x['tool'] for x in rec['trace']],
+              'questions':int(rec['status']=='waiting_user'),'decider':rec.get('decider',mode),'tools':[x['tool'] for x in rec['trace']],
               'model_ms':sum(x['latency_ms'] for x in u),'completion_tokens':sum(x['completion_tokens'] for x in u)})
             print(mode,task['id'],task['kind'],rec['status'],j['correct'],flush=True)
     keys=['correct','wrong_assign','unsafe_archive','tool_calls','invalid_calls','weights_read_attempts','ungrounded_assign','unknown_tool','instruction_evidence','unsupported_assign','early_ask','redacted_lines','questions']

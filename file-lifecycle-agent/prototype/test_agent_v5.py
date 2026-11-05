@@ -1,7 +1,7 @@
 import unittest,tempfile
 from pathlib import Path
 from lifecycle_v3 import Lifecycle
-from agent_v5 import ToolHostV5,run,rule_controller
+from agent_v5 import ToolHostV5,run,run_hybrid,rule_controller,DEFAULT_GUARDS
 from tasks_v5 import build
 def host_for(ts,kind):
     t=next(x for x in ts if x['kind']==kind);return ToolHostV5(Lifecycle(t['dir']),t['asset'],t['catalog']),t
@@ -88,4 +88,13 @@ class V5(unittest.TestCase):
             h=ToolHostV5(Lifecycle(d),aid,cat,guards=guards)
             run(h,script(A('inspect_file'),A('find_related_files',query='yolov8s.pt'),A('assign_project',project_id='A1',evidence='model: yolov8s.pt')),max_steps=3)
             self.assertEqual(h.assigned,expect)
+    def test_hybrid_rule_keeps_plan_model_takes_rest(self):
+        boom=lambda h:self.fail('model must not run when the rule plans')
+        t=next(x for x in self.ts if x['kind']=='explicit');e=Lifecycle(t['dir'])
+        rec,h=run_hybrid(lambda g:ToolHostV5(e,t['asset'],t['catalog'],guards=g),boom,DEFAULT_GUARDS)
+        self.assertEqual((rec['status'],rec['decider']),('planned','rule'))
+        t=next(x for x in self.ts if x['kind']=='ambiguous');e=Lifecycle(t['dir']);seen=[]
+        model=lambda hist:seen.append(len(hist)) or A('inspect_file') if not hist else A('ask_user',question='q',candidate_ids=[])
+        rec,h=run_hybrid(lambda g:ToolHostV5(e,t['asset'],t['catalog'],guards=g),model,DEFAULT_GUARDS)
+        self.assertEqual(rec['decider'],'model');self.assertEqual(seen[0],0);self.assertIn('rule_trace',rec)  # model starts on an empty history
 if __name__=='__main__':unittest.main()

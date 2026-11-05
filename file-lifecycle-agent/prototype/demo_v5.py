@@ -8,7 +8,7 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import argparse, json, random, shutil, subprocess, threading, time
 from lifecycle_v3 import Lifecycle
-from agent_v5 import ToolHostV5, run, rule_controller, content, TEXT, IMAGE, WEIGHTS, CHUNK
+from agent_v5 import ToolHostV5, run, run_hybrid, rule_controller, DEFAULT_GUARDS, content, TEXT, IMAGE, WEIGHTS, CHUNK
 from tasks_v5 import CATALOG, SHARED, FILLER, INJECT, NOISE_TEXT
 
 HERE = Path(__file__).resolve().parent
@@ -139,12 +139,12 @@ class Demo:
         e = self.engine(); a = e.data['assets'][aid]
         if a['path'] != a['original']: raise ValueError('이미 보관된 파일입니다. 먼저 되돌리세요.')
         a.update(project=None, keep=False, reason=None); e.save()
-        host = ToolHostV5(e, aid, CAT)
-        rec = run(host, self.ctl)
+        if self.ctl is rule_controller: host = ToolHostV5(e, aid, CAT); rec = run(host, self.ctl)
+        else: rec, host = run_hybrid(lambda g: ToolHostV5(e, aid, CAT, guards=g), self.ctl, {*DEFAULT_GUARDS, 'dense'})
         last = lambda tool: next((h for h in reversed(rec['trace']) if h['tool'] == tool and 'error' not in h['result']), None)
         ask, assign = last('ask_user'), last('assign_project')
         self.runs[aid] = {
-            'status': rec['status'], 'project': host.assigned, 'steps': rec['steps'], 'errors': rec['invalid_calls'],
+            'status': rec['status'], 'decider': rec.get('decider', 'rule'), 'project': host.assigned, 'steps': rec['steps'], 'errors': rec['invalid_calls'],
             'seconds': round(rec['elapsed_ms'] / 1000, 1),
             'evidence': assign and assign['result'].get('evidence', assign['arguments']['evidence']),
             'question': ask and ask['arguments']['question'], 'candidates': ask and ask['arguments']['candidate_ids'],
@@ -269,7 +269,7 @@ if __name__ == '__main__':
     if a.qwen:
         from qwen_tool_controller import QwenToolController
         from agent_v5 import SPECS, SYSTEM
-        ctl, name = QwenToolController(a.qwen, specs=SPECS, system=SYSTEM, adapter=a.adapter), 'Qwen3 native tool calling: ' + Path(a.qwen).name
+        ctl, name = QwenToolController(a.qwen, specs=SPECS, system=SYSTEM, adapter=a.adapter), '규칙 → Qwen3 하이브리드 (bge-m3 검색): ' + Path(a.qwen).name
     else:
         ctl, name = rule_controller, '규칙 controller (GPU 없이 실행)'
     demo = Demo(a.root, ctl, name); demo.watching = a.watch

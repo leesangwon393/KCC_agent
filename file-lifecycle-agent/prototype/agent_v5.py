@@ -169,7 +169,10 @@ class ToolHostV5:
             if 'dense' in self.guards:
                 ids=list(self.catalog);ds=dense_scores(args['query'],[self.catalog[k]['name']+' '+self.catalog[k]['desc'] for k in ids])
                 hits=sorted(((round(s,3),pid) for s,pid in zip(ds,ids)),key=lambda x:(-x[0],x[1]))
-                return {'candidates':[{'project_id':pid,'name':self.catalog[pid]['name'],'desc':self.catalog[pid]['desc'],'score':s} for s,pid in hits[:3]]}
+                # Cosines hide ties, so mark every project within DENSE_MARGIN of the top one (the same margin support() needs to single one out).
+                close=[pid for s,pid in hits if hits[0][0]-s<DENSE_MARGIN] if len(hits)>1 else []
+                close=close if len(close)>1 else []
+                return {'candidates':[{'project_id':pid,'name':self.catalog[pid]['name'],'desc':self.catalog[pid]['desc'],'score':s,**({'close':True} if pid in close else {})} for s,pid in hits[:max(3,len(close))]]}
             hits=sorted(((score(args['query'],c['name']+' '+c['desc'],'stopwords' in self.guards),pid) for pid,c in self.catalog.items()),key=lambda x:(-x[0],x[1]))
             return {'candidates':[{'project_id':pid,'name':self.catalog[pid]['name'],'desc':self.catalog[pid]['desc'],'score':s} for s,pid in hits[:3] if s>0]}
         if name=='find_related_files':
@@ -242,6 +245,16 @@ def run(host,controller,trace_path=None,max_steps=12):
     if trace_path:Path(trace_path).write_text(json.dumps(rec,ensure_ascii=False,indent=1))
     if hasattr(controller,'usage'):controller.usage.clear()
     return rec
+
+def run_hybrid(make_host,model,model_guards,trace_path=None):
+    """Rule first; it keeps the decision only when it reaches a plan. Otherwise the model starts over on a fresh host.
+    make_host(guards) -> ToolHostV5. Rule always uses DEFAULT_GUARDS (its score>=2 threshold is lexical). Returns (rec, host)."""
+    h=make_host(DEFAULT_GUARDS);rec=run(h,rule_controller);rec['decider']='rule'
+    if rec['status']!='planned':
+        h.asset().update(project=None,reason=None);h.e.save()  # rule may have assigned before failing
+        rule_trace=rec['trace'];h=make_host(model_guards);rec=run(h,model);rec.update(decider='model',rule_trace=rule_trace)
+    if trace_path:Path(trace_path).write_text(json.dumps(rec,ensure_ascii=False,indent=1))
+    return rec,h
 
 def _last(hist,tool):
     for h in reversed(hist):
