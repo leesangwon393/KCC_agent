@@ -23,6 +23,11 @@ class Lifecycle:
     def save(self):
         tmp=self.db.with_suffix('.tmp'); tmp.write_text(json.dumps(self.data,ensure_ascii=False,indent=2)); os.replace(tmp,self.db)
     def path(self,p):
+        q=Path(p).expanduser()
+        if q.is_absolute():  # only inside a registered project folder (the 'file' action target)
+            q=q.resolve()
+            if any(q.is_relative_to(Path(f).expanduser().resolve()) for f in self.data.get('folders',{}).values()): return q
+            raise ValueError('outside sandbox')
         p=(self.root/p).resolve()
         if not p.is_relative_to(self.root): raise ValueError('outside sandbox')
         return p
@@ -52,11 +57,16 @@ class Lifecycle:
         if any(x['refs'] and (a['path'] in x['refs'] or Path(a['path']).name in x['refs']) for x in self.data['assets'].values() if self.data['projects'].get(x['project'])!='completed'):
             return {'action':'keep','reason':'active reference'}
         if a['refs']: return {'action':'defer','reason':'reference-bearing file requires bundle-preserving move'}
+        folder=self.data.get('folders',{}).get(proj)
+        if folder and self.data['projects'].get(proj)!='completed':
+            target=str(Path(folder).expanduser().resolve()/Path(a['path']).name)
+            if Path(target).exists(): return {'action':'defer','reason':'same name already in project folder'}
+            return {'action':'file','reason':'project folder','target':target}
         if self.data['projects'].get(proj)!='completed': return {'action':'keep','reason':'active project'}
         return {'action':'archive','reason':'explicit completed project','target':f'archive/{proj}/{a["path"]}'}
     def execute(self,aid,plan,crash=False):
         if plan!=self.plan(aid): raise ValueError('stale plan')
-        if plan['action']!='archive': return False
+        if plan['action'] not in ('archive','file'): return False
         a=self.data['assets'][aid]; src=self.path(a['path']); dst=self.path(plan['target'])
         if sha(src)!=a['hash']: raise ValueError('changed source')
         if dst.exists(): raise FileExistsError(dst)

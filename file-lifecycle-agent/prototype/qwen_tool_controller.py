@@ -28,10 +28,10 @@ class QwenToolController:
             from peft import PeftModel
             self.model=PeftModel.from_pretrained(self.model,adapter).eval()
         # Qwen3 hybrid thinking; Qwen2.5 templates ignore the flag.
-        self.specs=specs or SPECS;self.system=system or NATIVE_SYSTEM
+        self.specs=specs or SPECS;self.system=system or NATIVE_SYSTEM;self.task=TASK
         self.thinking=thinking;self.max_new_tokens=1536 if thinking else 128;self.usage=[];self.torch=torch
     def messages(self,obs):
-        m=[{'role':'system','content':self.system},{'role':'user','content':TASK}]
+        m=[{'role':'system','content':self.system},{'role':'user','content':self.task}]
         # v4 passes {tool: result}; v5 passes a history list with real arguments and errors.
         hist=[{'tool':k,'arguments':{},'result':v} for k,v in obs.items()] if isinstance(obs,dict) else obs
         for h in hist:
