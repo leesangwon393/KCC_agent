@@ -136,6 +136,30 @@ python prototype/demo_v5.py --qwen <hf_model_dir> --port 8765   # GPU 서버, ss
 - 학습 전 1.7B의 실패는 대부분 같은 호출 반복이었고, LoRA가 이를 없앴습니다. 학습 후 호출 형식·순서는 거의 완벽합니다.
 - 남은 실패는 도구 호출이 아니라 판단 문제입니다. 모호한 파일에서 프로젝트 검색(어휘 일치)이 후보를 못 찾아 빈 후보로 질문하거나, 근거 검사가 맞는 근거를 거절해 질문으로 빠집니다.
 
+## Held-out 테스트셋 (2026-11-04)
+
+학습에 쓰지 않은 75개(`data_collect/batch_t1~t3.json`)를 새로 만들었습니다. 약점 영역을 겨냥했습니다: 가중치·경로, 영어·복합어·바꿔 말한 근거, 정규식이 놓치는 주입, 진짜 동점. 3관점으로 검증했고, 재라벨링·현실성 모두 keep인 **clean 66개**를 주 지표로 씁니다(`sft/test_split.json`, 자세한 검증 결과는 `data_collect/VERIFY_REPORT.md`).
+
+| controller | 가드 | 정답 (clean 66) | 잘못 지정 | 위험 보관 |
+|---|---|---|---|---|
+| 규칙 | 기본 5종 | **43** | 1 | 0 |
+| Qwen3-1.7B 학습 전 | 기본 5종 | 20 | 8 | 0 |
+| Qwen3-1.7B LoRA | 기본 5종 | 31 | 8 | 0 |
+| Qwen3-8B 학습 전 | 기본 5종 | 32 | 8 | 1 |
+| Qwen3-8B QLoRA | 기본 5종 | 38 | 5 | 0 |
+| Qwen3-1.7B LoRA | + fuzzy, stopwords | 31 | 8 | 0 |
+| Qwen3-1.7B LoRA (노트북) | + shared_weights, dense(bge-m3) | 35 | **1** | 0 |
+| Qwen3-1.7B LoRA, dense 관찰로 재학습 (노트북) | + shared_weights, dense | 27 | 1 | 0 |
+
+결과 파일: `results/test/summary.json`, tool calling 지표 `results/test/tool_calling_test75.txt`.
+
+- **수집 데이터에서는 아직 규칙 controller가 가장 높습니다.** 학습한 모델은 합성 데이터에서는 거의 완벽하지만(51/51), 새 데이터에서는 그만큼 나오지 않습니다.
+- **fuzzy·stopwords 가드는 효과가 없었습니다.** 학습한 모델은 근거를 이미 정확히 인용하고, 약한 단어 겹침만으로 지정한 경우도 없었습니다.
+- **병목은 프로젝트 검색입니다.** 1.7B LoRA가 지정해야 할 파일에서 질문으로 빠진 20건 모두, 단어 겹침 검색이 정답 프로젝트를 찾지 못했습니다. 모델이 실제로 보낸 검색어로 다시 재 보면, 정답이 상위 3개에 드는 비율은 단어 겹침 10/33, **bge-m3 33/33**입니다(`prototype/retrieval_check.py`).
+- `dense` 가드(옵션): 검색을 bge-m3로 하고, 단어 겹침으로 프로젝트를 정하지 못할 때 bge-m3 1위와 2위의 점수 차가 0.10 이상이면 지정을 허용합니다. 0.10은 테스트셋이 아니라 수집 batch 1~4에서 골랐습니다.
+- `shared_weights` 가드: 같은 가중치 파일을 여러 프로젝트 설정이 참조하면 그중 하나로 지정하지 못하게 합니다. 이 가드와 dense를 함께 켠 실행에서 잘못 지정이 8건에서 1건으로 줄었습니다.
+- dense 검색 결과로 다시 학습했더니 오히려 떨어졌습니다(27). bge-m3는 항상 후보 3개를 촘촘한 실수 점수로 보여 줘서 **동점이 드러나지 않습니다.** 그래서 모델이 애매한 파일에서 후보 없이 질문합니다(ambiguous 0/10). 다음 단계는 1위와 점수가 가까운 후보에 "close" 표시를 붙여 동점 신호를 되살리는 것입니다.
+
 ## 트리거 (자동 감지)
 
 ```sh
@@ -159,6 +183,8 @@ sh scripts/ablate.sh                            # 가드를 하나씩 끈 ablati
 python prototype/case_check.py data_collect/batch_*.json   # 수집 사례 기계 검사
 python prototype/eval_v5.py --cases=sft/split.json         # 수집 사례 평가 (규칙 controller)
 python prototype/tool_eval.py [--split=test] <experiment_dir> ...   # tool calling 지표
+python prototype/eval_v5.py --cases=sft/test_split.json:clean [모델...]   # held-out 테스트 (clean 66)
+python prototype/make_sft.py sft/dense --dense   # bge-m3 검색 관찰로 SFT 데이터 생성
 ```
 
 `qwen_tool_controller.py`는 Qwen 공식 tool template(`tools=`, `<tool_call>`)을 사용하며, 관찰 기록을 assistant tool_calls와 tool 메시지로 재구성합니다. 이름이 `_think`로 끝나면 Qwen3 thinking 모드가 켜집니다.

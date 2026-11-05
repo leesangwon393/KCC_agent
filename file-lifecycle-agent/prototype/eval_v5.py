@@ -5,7 +5,7 @@ usage: eval_v5.py [--no-guards | --guards=a,b] [--label=x] [--cases=split.json[:
 import json,sys,time,collections
 from pathlib import Path
 from lifecycle_v3 import Lifecycle
-from agent_v5 import ToolHostV5,run,rule_controller,SPECS,SYSTEM,GUARDS
+from agent_v5 import ToolHostV5,run,rule_controller,SPECS,SYSTEM,GUARDS,DEFAULT_GUARDS
 from tasks_v5 import build
 
 def build_cases(spec,root):
@@ -26,7 +26,7 @@ def judge(task,rec,host):
 
 def main():
     opts={a.split('=')[0]:a.split('=',1)[-1] for a in sys.argv[1:] if a.startswith('--')};argv=[a for a in sys.argv[1:] if not a.startswith('--')]
-    guards=set(GUARDS) if '--guards' not in opts and '--no-guards' not in opts else {'quote'} if '--no-guards' in opts else {g for g in opts['--guards'].split(',') if g}
+    guards=set(DEFAULT_GUARDS) if '--guards' not in opts and '--no-guards' not in opts else {'quote'} if '--no-guards' in opts else {g for g in opts['--guards'].split(',') if g}
     assert guards<=set(GUARDS),guards
     R=Path(__file__).resolve().parents[1];out=R/'experiments'/('v5_'+time.strftime('%Y%m%d_%H%M%S')+('_'+opts['--label'] if '--label' in opts else ''));out.mkdir(parents=True)
     modes=[] if '--no-rule' in opts else [('rule',rule_controller)]

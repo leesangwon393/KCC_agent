@@ -25,7 +25,26 @@ def content(p):
     return _ocr_cache[key]
 CHUNK=1200
 # Host guards, individually switchable for ablation. 'quote' is the original v5 grounding check.
-GUARDS=('quote','instruction','support','read_through','redact')
+GUARDS=('quote','instruction','support','read_through','redact','fuzzy','stopwords','shared_weights','dense')
+DEFAULT_GUARDS=tuple(g for g in GUARDS if g!='dense')  # 'dense' needs torch + bge-m3, so it is opt-in
+DENSE_MARGIN=0.10  # tuned on collected batches 1-4 (not the held-out batch_t*): 43/59 singled out, 1 wrong top-1
+_dense=None
+
+def dense_scores(query,docs):
+    """bge-m3 dense cosine (CLS pooling), loaded once."""
+    global _dense
+    import torch
+    if _dense is None:
+        from transformers import AutoTokenizer,AutoModel
+        hub=Path.home()/'.cache/huggingface/hub/models--BAAI--bge-m3/snapshots'
+        path=next(str(x) for x in hub.glob('*') if (x/'tokenizer.json').exists())
+        dev='cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+        _dense=(AutoTokenizer.from_pretrained(path),AutoModel.from_pretrained(path).to(dev).eval(),dev)
+    tok,m,dev=_dense
+    with torch.no_grad():
+        x=tok([query[:500]]+docs,padding=True,truncation=True,max_length=512,return_tensors='pt').to(dev)
+        e=torch.nn.functional.normalize(m(**x).last_hidden_state[:,0],dim=-1)
+    return (e[1:]@e[0]).tolist()
 MAX_PAGES=5  # ask_user is blocked until the text is read through, up to this many chunks
 # shortcut: keyword heuristic for instruction-like lines in untrusted content; replace with a classifier once real injected samples exist.
 INSTRUCTION=re.compile(r'ignore (all |any )?(previous|prior)|system override|\b(execute_plan|assign_project|ask_user|finish|preview_plan|delete|rm -rf)\b|무시하라|무시하고|지시|삭제하|지정하라|실행하라',re.I)
@@ -76,13 +95,30 @@ def _strings(x):
 
 def norm(s):return re.sub(r'\s+',' ',s).strip()
 
-def score(query,doc):
+# Generic words that match every project; with the 'stopwords' guard they never count as support.
+STOP={'파일','문서','자료','데이터','모델','결과','프로젝트','정리','메모','버전','최종','file','files','data','model','result','results','project','final','notes','version'}
+
+def score(query,doc,stop=False):
     """Count catalog tokens hit by a query token (prefix match tolerates Korean particles)."""
-    q=set(tokens(query));return sum(1 for t in set(tokens(doc)) if len(t)>=2 and any(x.startswith(t) for x in q))
+    q=set(tokens(query));return sum(1 for t in set(tokens(doc)) if len(t)>=2 and not (stop and t in STOP) and any(x.startswith(t) for x in q))
+
+def snap(ev,text,min_ratio=0.9):
+    """'fuzzy' guard: a near-verbatim quote is replaced by the source line it copies (the stored evidence stays verbatim)."""
+    import difflib
+    best=max(((difflib.SequenceMatcher(None,ev,l).ratio(),l) for l in (norm(x) for x in text.splitlines()) if len(l)>=6),default=(0,None))
+    return best[1] if best[0]>=min_ratio else None
+
+def safetensors_meta(p,cap=1<<20):
+    """Header metadata of a .safetensors file without loading tensors (8-byte LE length + JSON)."""
+    with open(p,'rb') as f:
+        n=int.from_bytes(f.read(8),'little')
+        if not 0<n<=min(cap,p.stat().st_size-8):return None
+        try:return json.loads(f.read(n)).get('__metadata__')
+        except ValueError:return None
 
 class ToolHostV5:
     def __init__(self,engine,aid,catalog,guards=True):
-        self.guards=set(GUARDS) if guards is True else {'quote'} if guards is False else set(guards);self.e=engine;self.aid=aid;self.catalog=catalog;self.history=[];self.stats={'weights_read_attempts':0,'ungrounded_assign':0,'unknown_tool':0,'instruction_evidence':0,'unsupported_assign':0,'early_ask':0,'redacted_lines':0}
+        self.guards=set(DEFAULT_GUARDS) if guards is True else {'quote'} if guards is False else set(guards);self.e=engine;self.aid=aid;self.catalog=catalog;self.history=[];self.stats={'weights_read_attempts':0,'ungrounded_assign':0,'unknown_tool':0,'instruction_evidence':0,'unsupported_assign':0,'early_ask':0,'redacted_lines':0,'snapped_quotes':0}
         self.assigned=None;self.refs_checked=False;self.plan=None
     def asset(self):return self.e.data['assets'][self.aid]
     def file(self):return self.e.path(self.asset()['path'])
@@ -96,15 +132,25 @@ class ToolHostV5:
         m=re.search(r'project_id\s*[:=]\s*([A-Za-z0-9_]+)',ev)
         if m:return [m.group(1)]
         owners={f['project_id'] for h in self.history if h['tool']=='find_related_files' and 'error' not in h['result'] for f in h['result']['files'] if f['project_id'] and any(ev in norm(l) for l in f['matching_lines'])}
+        if owners and 'shared_weights' in self.guards and self.file().suffix.lower() in WEIGHTS:
+            # A weights file referenced by several projects' configs is shared: one config line does not single out its owner.
+            refs={f['project_id'] for h in self.history if h['tool']=='find_related_files' and 'error' not in h['result'] for f in h['result']['files'] if f['project_id'] and any(self.file().name in l for l in f['matching_lines'])}
+            if len(refs)>1:return sorted(refs)
         if owners:return sorted(owners)
-        sc={k:score(ev,c['name']+' '+c['desc']) for k,c in self.catalog.items()};top=max(sc.values())
-        return sorted(k for k,v in sc.items() if v==top and v>0)
+        sc={k:score(ev,c['name']+' '+c['desc'],'stopwords' in self.guards) for k,c in self.catalog.items()};top=max(sc.values())
+        lex=sorted(k for k,v in sc.items() if v==top and v>0)
+        if 'dense' in self.guards and len(lex)!=1 and len(self.catalog)>1:
+            # Lexical overlap failed (English, paraphrase, compound): accept a clear semantic top-1.
+            ids=list(self.catalog);d=sorted(zip(dense_scores(ev,[self.catalog[k]['name']+' '+self.catalog[k]['desc'] for k in ids]),ids),reverse=True)
+            if d[0][0]-d[1][0]>=DENSE_MARGIN:return [d[0][1]]
+        return lex
     def call(self,name,args):
         validate(name,args);done={h['tool'] for h in self.history if 'error' not in h['result']}
         p=self.file();suffix=p.suffix.lower()
         if name=='inspect_file':
             route='weights' if suffix in WEIGHTS else 'text' if suffix in TEXT|IMAGE else 'unsupported'
-            return {'name':p.name,'suffix':suffix,'route':route,'bytes':p.stat().st_size,**({'source':'ocr'} if suffix in IMAGE else {})}
+            meta=safetensors_meta(p) if suffix=='.safetensors' else None
+            return {'name':p.name,'suffix':suffix,'route':route,'bytes':p.stat().st_size,**({'source':'ocr'} if suffix in IMAGE else {}),**({'metadata':meta} if meta else {})}
         if name=='read_content':
             if 'inspect_file' not in done:raise ToolError('inspect_file first')
             if suffix not in TEXT|IMAGE:
@@ -120,7 +166,11 @@ class ToolHostV5:
             return r
         if name=='search_projects':
             if not args['query'].strip():raise ToolError('empty query')
-            hits=sorted(((score(args['query'],c['name']+' '+c['desc']),pid) for pid,c in self.catalog.items()),key=lambda x:(-x[0],x[1]))
+            if 'dense' in self.guards:
+                ids=list(self.catalog);ds=dense_scores(args['query'],[self.catalog[k]['name']+' '+self.catalog[k]['desc'] for k in ids])
+                hits=sorted(((round(s,3),pid) for s,pid in zip(ds,ids)),key=lambda x:(-x[0],x[1]))
+                return {'candidates':[{'project_id':pid,'name':self.catalog[pid]['name'],'desc':self.catalog[pid]['desc'],'score':s} for s,pid in hits[:3]]}
+            hits=sorted(((score(args['query'],c['name']+' '+c['desc'],'stopwords' in self.guards),pid) for pid,c in self.catalog.items()),key=lambda x:(-x[0],x[1]))
             return {'candidates':[{'project_id':pid,'name':self.catalog[pid]['name'],'desc':self.catalog[pid]['desc'],'score':s} for s,pid in hits[:3] if s>0]}
         if name=='find_related_files':
             q=args['query'].strip().lower()
@@ -136,6 +186,9 @@ class ToolHostV5:
             pid=args['project_id']
             if pid not in self.catalog:raise ToolError('unknown project_id')
             ev=norm(args['evidence'])
+            if 'fuzzy' in self.guards and len(ev)>=6 and ev not in self.grounded_text():
+                src='\n'.join(_strings([h['result'] for h in self.history if h['tool'] in ('read_content','find_related_files') and 'error' not in h['result']]))
+                ev=snap(ev,src) or ev;self.stats['snapped_quotes']+=ev!=norm(args['evidence'])
             if 'quote' in self.guards and (len(ev)<6 or ev not in self.grounded_text()):
                 self.stats['ungrounded_assign']+=1;raise ToolError('evidence is not an exact quote: copy one line verbatim from read_content text or find_related_files matching_lines (catalog names/descriptions do not count)')
             if 'instruction' in self.guards and INSTRUCTION.search(ev):
@@ -147,7 +200,7 @@ class ToolHostV5:
                     raise ToolError(f'evidence does not single out {pid}; it supports {sup or "no project"}. '+('If several projects fit, call ask_user with them as candidate_ids' if len(sup)>1 else 'Quote a line that names this project\'s topic, or ask_user'))
             self.asset()['project']=pid;self.asset()['reason']='agent evidence: '+ev[:120];self.e.save()
             self.assigned=pid;self.refs_checked=False;self.plan=None
-            return {'assigned':pid}
+            return {'assigned':pid,'evidence':ev}
         if name=='check_references':
             if not self.assigned:raise ToolError('assign_project first')
             a=self.asset();refs=[{'path':x['path'],'project_id':x['project'],'project_status':self.e.data['projects'].get(x['project'])} for x in self.e.data['assets'].values() if a['path'] in x['refs'] or Path(a['path']).name in x['refs']]

@@ -27,7 +27,8 @@ def task_metrics(trace, expected):
     route = next((h['result']['route'] for h in ok if h['tool'] == 'inspect_file'), None)
     m = {'calls': len(t), 'errors': collections.Counter(c for _, c in errs), 'recovered': sum(rec), 'error_n': len(errs),
          'first_inspect': bool(t) and t[0]['tool'] == 'inspect_file' and 'error' not in t[0]['result'],
-         'terminated': trace['status'] in ('planned', 'waiting_user')}
+         'terminated': trace['status'] in ('planned', 'waiting_user'),
+         'asked': trace['status'] == 'waiting_user', 'gold_ask': expected.get('status') == 'waiting_user'}
     if route == 'weights': m['weights_via_related'] = 'find_related_files' in names
     if route == 'text': m['read_before_decide'] = any(n == 'read_content' for n in names[:next((k for k, n in enumerate(names) if n in ('assign_project', 'ask_user')), len(names))])
     assigns = [h for h in ok if h['tool'] == 'assign_project']
@@ -56,6 +57,9 @@ def summarize(rows):
             'text_read_before_decide': rate('read_before_decide'), 'weights_via_related_files': rate('weights_via_related'),
             'assign_project_correct': rate('assign_project_ok'), 'clean_tail_after_assign': rate('clean_tail'),
             'ask_candidates_exact': rate('ask_candidates_exact'),
+            # Abstention: should the agent have asked instead of assigning?
+            'ask_precision': (lambda a: f'{sum(r["gold_ask"] for r in a)}/{len(a)}')([r for r in rows if r['asked']]),
+            'ask_recall': (lambda g: f'{sum(r["asked"] for r in g)}/{len(g)}')([r for r in rows if r['gold_ask']]),
             'ask_candidates_jaccard': (lambda xs: round(sum(xs) / len(xs), 2) if xs else '-')([r['ask_candidates_jaccard'] for r in rows if 'ask_candidates_jaccard' in r])}
 
 

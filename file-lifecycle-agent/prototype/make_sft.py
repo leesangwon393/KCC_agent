@@ -15,7 +15,8 @@ DC = R / 'data_collect'
 
 
 def load_cases():
-    cases = {c['id']: c for f in sorted(DC.glob('batch_*.json')) for c in json.loads(f.read_text())}
+    # batch_t*.json is the held-out test set: never loaded for training.
+    cases = {c['id']: c for f in sorted(DC.glob('batch_[0-9]*.json')) for c in json.loads(f.read_text())}
     V = collections.defaultdict(dict)
     for lens in ['label', 'realism', 'policy']:
         for v in json.loads((DC / f'verdict_{lens}.json').read_text()): V[v['id']][lens] = v['verdict']
@@ -35,9 +36,9 @@ def first_line(text):
     return next((l.strip()[:60] for l in text.splitlines() if len(l.strip()) > 5), text[:60])
 
 
-def oracle(task, gold, catalog):
+def oracle(task, gold, catalog, guards=True):
     """Gold path through the host. Returns the host history, or None if the host rejects the gold label."""
-    h = ToolHostV5(Lifecycle(task['dir']), task['asset'], catalog)
+    h = ToolHostV5(Lifecycle(task['dir']), task['asset'], catalog, guards=guards)
     def call(name, **a):
         r = h.call(name, a); h.history.append({'tool': name, 'arguments': a, 'reason': '', 'result': r}); return r
     try:
@@ -71,14 +72,14 @@ def examples(history):
         yield {'messages': QwenToolController.messages(shim, history[:k]), 'call': {'name': h['tool'], 'arguments': h['arguments']}}
 
 
-def main(out):
+def main(out, guards=True):
     out = Path(out); out.mkdir(parents=True, exist_ok=True)
     cases, V = load_cases(); tr, ev = split(cases, V)
     stats = collections.Counter(); rows = []
     with tempfile.TemporaryDirectory() as t:
         for i in tr:
             c = cases[i]; task = build_case(c, Path(t) / 'c')
-            hist = oracle(task, c['gold'], task['catalog'])
+            hist = oracle(task, c['gold'], task['catalog'], guards)
             stats['collected_ok' if hist else 'collected_rejected'] += 1
             if hist: rows += [dict(e, source=i) for e in examples(hist)]
         # Synthetic dev split only; the test split stays held out. Gold evidence = the rule baseline's accepted quote.
@@ -87,7 +88,7 @@ def main(out):
             h = ToolHostV5(Lifecycle(task['dir']), task['asset'], task['catalog']); rec = run(h, rule_controller)
             ev_ = next((x['arguments']['evidence'] for x in rec['trace'] if x['tool'] == 'assign_project' and 'error' not in x['result']), None)
             gold = {'status': task['truth']['status'], 'project': task['truth']['project'], 'evidence': ev_, 'candidates': task['truth']['candidates'] or []}
-            task2 = dict(task); hist = oracle(task2, gold, task['catalog']) if rec['status'] == task['truth']['status'] else None
+            task2 = dict(task); hist = oracle(task2, gold, task['catalog'], guards) if rec['status'] == task['truth']['status'] else None
             stats['synthetic_ok' if hist else 'synthetic_rejected'] += 1
             if hist: rows += [dict(e, source=f'synth-{task["id"]}') for e in examples(hist)]
     (out / 'split.json').write_text(json.dumps({'train': tr, 'eval': ev}, indent=1))
@@ -98,4 +99,7 @@ def main(out):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1] if len(sys.argv) > 1 else R / 'sft')
+    # --dense: observations come from the bge-m3 search the model will see at inference (scores are cosines, not counts).
+    from agent_v5 import DEFAULT_GUARDS
+    args = [a for a in sys.argv[1:] if a != '--dense']
+    main(args[0] if args else R / 'sft', set(DEFAULT_GUARDS) | {'dense'} if '--dense' in sys.argv else True)
