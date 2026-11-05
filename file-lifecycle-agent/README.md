@@ -208,6 +208,28 @@ python prototype/demo_v5.py --watch --inbox ~/Desktop    # 바탕화면 새 스�
 - 스크린샷(.png/.jpg/.heic)은 macOS Vision OCR(`prototype/ocr.swift`, `swiftc -O ocr.swift -o bin/ocr`)로 글자를 뽑아 텍스트처럼 처리합니다. OCR이 실패하면 반복하지 않고 사용자에게 묻습니다.
 - 노트북 실행: `--qwen <Qwen3-1.7B 경로> --adapter <LoRA 경로>`. MPS를 자동으로 씁니다.
 
+## 실사용 모드: 다운로드·캡처를 바로 프로젝트 폴더로 (2026-11-06)
+
+```sh
+python prototype/demo_v5.py --root <작업폴더> --projects <projects.json> --watch \
+  --strict-auto-inbox ~/Downloads --strict-auto-inbox ~/Desktop \
+  --auto-inbox "~/Library/Mobile Documents/com~apple~CloudDocs/KCC-inbox" \
+  --source-rules <source_rules.json> --qwen <Qwen3-1.7B> --adapter <LoRA> --digest-hours 5
+```
+
+| 입력 | 자동 저장 조건 | 그 외 |
+|---|---|---|
+| 아이폰 캡처 (단축어 → iCloud `KCC-inbox`, `--auto-inbox`) | 판단이 `file` 계획에 도달하면 바로 저장 | 질문 |
+| 다운로드·맥 캡처 (`--strict-auto-inbox`) | PDF/DOCX/PPTX/이미지이고, **다운로드 출처 규칙** 또는 **규칙 controller**가 확정한 경우만 | 모델 판단은 승인 대기, 애매하면 질문 |
+
+- **문서 읽기** (`agent_v5.doc_text`): PDF는 `pdftotext`, DOCX는 macOS `textutil`, PPTX는 zip XML, ipynb는 셀 소스. 모두 로컬에서 처리합니다.
+- **다운로드 출처 규칙** (`sources.py`): 브라우저가 파일에 남기는 `kMDItemWhereFroms`(파일 URL, 클릭한 페이지)에서 `호스트/경로?id=` 키를 만들고, 사용자가 답하거나 승인하면 "이 페이지 → 이 폴더"를 학습합니다. 강의실 페이지 하나만 등록하면 이후 그 페이지의 자료는 모델 호출 없이 바로 저장됩니다.
+- **답변 학습** (`profile_learn.py`): 질문에 답하면 Qwen이 `update_profile` 도구로 그 폴더 `_project.md`에 한 줄을 덧붙입니다. 덧붙이기만 허용하고, 파일에 있는 단어를 써야 하며, 지시문은 거부합니다.
+- **모아서 물어보기** (`digest.py`): N시간마다(맥 사용 중일 때만) 미해결 파일을 번호로 보여 주고, 자연어 답장을 Qwen이 `create_project/assign_files/leave_files/done`으로 해석합니다. 미리보기 확인 후 새 폴더와 에이전트 지침(`_project.md`)을 만들고 파일을 옮깁니다.
+- 규칙 controller 수정: 읽기 한도를 호스트 가드와 같은 5청크로 맞추고(이전엔 4청크라 반복 호출), 끝부분 검색이 애매하면 문서 앞부분(제목)으로 한 번 더 검색합니다. 근거 인용이 거부되면 반복하지 않고 묻습니다.
+  - held-out 66건(규칙): 43 → **44**, 75건 전체 47 → **50**, 잘못 지정 1 그대로.
+- 학습 곡선: `sft/plot_training_pretty.py` → `results/figures/training_loss.png` (검증 손실은 기록하지 않았음).
+
 ## 실행
 
 ```sh

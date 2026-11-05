@@ -1,0 +1,103 @@
+{
+ "args": {
+  "model": "/home/work/.cache/huggingface/hub/models--Qwen--Qwen3-1.7B/snapshots/70d244cc86ccca08cf5af4e1e306ecf908b1ad5e",
+  "data": "../sft/train.jsonl",
+  "out": "/home/work/kcc_agent/sft/lora_qwen3_1.7b",
+  "epochs": 2,
+  "lr": 0.0002,
+  "rank": 16,
+  "accum": 8,
+  "max_len": 4096,
+  "qlora": false
+ },
+ "examples": 684,
+ "steps": 172,
+ "seconds": 812,
+ "loss_log": [
+  {
+   "epoch": 0,
+   "step": 10,
+   "loss": 0.21822568400073122
+  },
+  {
+   "epoch": 0,
+   "step": 20,
+   "loss": 0.04749455450946698
+  },
+  {
+   "epoch": 0,
+   "step": 30,
+   "loss": 0.030785032773565035
+  },
+  {
+   "epoch": 0,
+   "step": 40,
+   "loss": 0.01565017578277548
+  },
+  {
+   "epoch": 0,
+   "step": 50,
+   "loss": 0.012226366391223565
+  },
+  {
+   "epoch": 0,
+   "step": 60,
+   "loss": 0.022892325372095002
+  },
+  {
+   "epoch": 0,
+   "step": 70,
+   "loss": 0.020962204472630218
+  },
+  {
+   "epoch": 0,
+   "step": 80,
+   "loss": 0.038512483122872254
+  },
+  {
+   "epoch": 1,
+   "step": 90,
+   "loss": 0.0022926687251811017
+  },
+  {
+   "epoch": 1,
+   "step": 100,
+   "loss": 0.003185724123238742
+  },
+  {
+   "epoch": 1,
+   "step": 110,
+   "loss": 0.0026236581552552705
+  },
+  {
+   "epoch": 1,
+   "step": 120,
+   "loss": 0.01211627718530508
+  },
+  {
+   "epoch": 1,
+   "step": 130,
+   "loss": 0.015032741696336416
+  },
+  {
+   "epoch": 1,
+   "step": 140,
+   "loss": 0.01137730640348309
+  },
+  {
+   "epoch": 1,
+   "step": 150,
+   "loss": 0.0015386405628873944
+  },
+  {
+   "epoch": 1,
+   "step": 160,
+   "loss": 0.005275775213067391
+  },
+  {
+   "epoch": 1,
+   "step": 170,
+   "loss": 0.001512060039442531
+  }
+ ]
+}

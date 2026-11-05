@@ -8,7 +8,10 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import argparse, json, random, shutil, subprocess, threading, time
 from lifecycle_v3 import Lifecycle
-from agent_v5 import ToolHostV5, run, run_hybrid, rule_controller, DEFAULT_GUARDS, content, TEXT, IMAGE, WEIGHTS, CHUNK
+from agent_v5 import ToolHostV5, run, run_hybrid, rule_controller, DEFAULT_GUARDS, content, TEXT, IMAGE, WEIGHTS, CHUNK, DOCS
+from sources import where_froms, source_keys, Rules
+from profile_learn import learn, profile_text, rule_note
+from digest import parse_reply, guide, user_active
 from tasks_v5 import CATALOG, SHARED, FILLER, INJECT, NOISE_TEXT
 
 HERE = Path(__file__).resolve().parent
@@ -64,15 +67,20 @@ def notify(title, text):
 class Watcher(threading.Thread):
     """Trigger: a new file in a watched folder is ingested and analyzed, then the user is notified.
     --inbox folders (e.g. ~/Desktop for screenshots) are copied in, never moved: user originals stay untouched."""
-    def __init__(self, demo, inboxes, interval=2.0):
-        super().__init__(daemon=True); self.d = demo; self.inboxes = [Path(x).expanduser() for x in inboxes]; self.interval = interval
+    def __init__(self, demo, inboxes, interval=2.0, auto_inboxes=(), strict_inboxes=()):
+        super().__init__(daemon=True); self.d = demo; self.interval = interval
+        # auto: any confident 'file' plan runs without a click (iPhone captures). strict: only download-source rules and the
+        # rule controller, and only documents/screenshots (Downloads, Desktop: personal notes and mixed files live there).
+        self.auto_inboxes = {Path(x).expanduser() for x in auto_inboxes}; self.strict_inboxes = {Path(x).expanduser() for x in strict_inboxes}
+        self.auto = set(); self.strict = set()
+        self.inboxes = list(dict.fromkeys([Path(x).expanduser() for x in inboxes] + sorted(self.auto_inboxes) + sorted(self.strict_inboxes)))
         self.sizes = {}
         self.seen = {p for x in self.inboxes for p in x.glob('*')}  # only files that appear after start
 
     def candidates(self):
         for x in self.inboxes:
             for p in x.glob('*'):
-                if p not in self.seen and p.is_file() and not p.name.startswith('.') and p.suffix.lower() in TEXT | IMAGE | WEIGHTS:
+                if p not in self.seen and p.is_file() and not p.name.startswith(('.', '~$')) and p.suffix.lower() in TEXT | IMAGE | WEIGHTS:
                     yield p, self.d.root / 'screenshots' / p.name
         for sub in WATCH_DIRS:
             for p in (self.d.root / sub).glob('*'):
@@ -93,7 +101,12 @@ class Watcher(threading.Thread):
                 copy_to.parent.mkdir(exist_ok=True)
                 try: shutil.copy2(p, copy_to)
                 except OSError: copy_to.unlink(missing_ok=True); continue  # iCloud file not downloaded yet: retry next tick
-                self.seen.add(p); continue  # analyzed on the next tick
+                self.seen.add(p)
+                urls = where_froms(p)
+                if urls: self.d.sources[str(copy_to.relative_to(self.d.root))] = urls; self.d.save_sources()
+                if p.parent in self.auto_inboxes: self.auto.add(copy_to)
+                if p.parent in self.strict_inboxes: self.strict.add(copy_to)
+                continue  # analyzed on the next tick
             rel = str(p.relative_to(self.d.root))
             if rel in known: continue
             with self.d.lock:
@@ -103,6 +116,11 @@ class Watcher(threading.Thread):
                 a = self.d.engine().data['assets'][aid]; plan = self.d.engine().plan(aid) if a['project'] else None
                 text = (f'{r["project"]} 자료 · ' + {'file': '폴더 저장 권장', 'archive': '보관 권장', 'keep': '유지 권장', 'defer': '보류'}[plan['action']]) if plan \
                     else '어느 프로젝트인지 확인이 필요해요' if r['status'] == 'waiting_user' else str(r['status'])
+                strict_ok = p in self.strict and r.get('decider') in ('source', 'rule') and p.suffix.lower() in DOCS | IMAGE
+                if (p in self.auto or strict_ok) and plan and plan['action'] == 'file':
+                    # Auto inbox (iPhone captures): the user captured on purpose, so a confident 'file' plan runs now; undo stays on the page.
+                    try: self.d.engine().execute(aid, plan); text = f'{CAT[a["project"]]["name"]} 폴더에 자동 저장 (되돌리기 가능)'
+                    except Exception as exc: text += f' · 자동 저장 실패: {exc}'
                 self.d.events.append({'path': rel, 'text': text}); self.d.events = self.d.events[-20:]; self.d.version += 1
             notify(f'새 파일: {p.name}', text)
 
@@ -121,9 +139,17 @@ class Demo:
         self.runs = json.loads(self.runs_path.read_text()) if self.runs_path.exists() else {}
         self.lock = threading.Lock()  # HTTP handler and watcher share the manifest and the model
         self.version = 0; self.events = []; self.watching = False  # watcher activity the page polls for
+        self.sources_path = self.root / 'sources.json'  # copy path -> download URLs (kMDItemWhereFroms of the original)
+        self.sources = json.loads(self.sources_path.read_text()) if self.sources_path.exists() else {}
+        self.rules = None  # sources.Rules: page URL -> project, learned from answers and approvals
 
     def engine(self): return Lifecycle(self.root)
     def save_runs(self): self.runs_path.write_text(json.dumps(self.runs, ensure_ascii=False, indent=1))
+    def save_sources(self): self.sources_path.write_text(json.dumps(self.sources, ensure_ascii=False, indent=1))
+
+    def learn_source(self, a, pid):
+        keys = source_keys(self.sources.get(a['original'], []))
+        return self.rules.learn(keys, pid) if self.rules and keys else {}
 
     def state(self):
         e = self.engine(); assets = []
@@ -136,12 +162,19 @@ class Demo:
                            'why': explain(e, a, r, plan) if r else []})
         assets.sort(key=lambda x: x['original'])
         return {'controller': self.name, 'root': str(self.root), 'assets': assets, 'journal': e.data['journal'][-20:],
-                'catalog': [{'id': k, **v, 'status': e.data['projects'].get(k)} for k, v in CAT.items()]}
+                'catalog': [{'id': k, 'name': v['name'], 'desc': v['desc'], 'status': e.data['projects'].get(k)} for k, v in CAT.items()],
+                'digest': self.digest, 'pending': len(self.pending())}
 
     def analyze(self, aid):
         e = self.engine(); a = e.data['assets'][aid]
         if a['path'] != a['original']: raise ValueError('이미 보관된 파일입니다. 먼저 되돌리세요.')
         a.update(project=None, keep=False, reason=None); e.save()
+        m = self.rules and self.rules.match(source_keys(self.sources.get(a['original'], [])))
+        if m and m[1] in CAT:  # downloaded from a page the user already mapped to a folder: no model call needed
+            a.update(project=m[1], reason='source rule'); e.save()
+            self.runs[aid] = {'status': 'planned', 'decider': 'source', 'project': m[1], 'steps': 0, 'errors': 0, 'seconds': 0,
+                              'evidence': m[0], 'question': None, 'candidates': None, 'trace': [], 'stats': {}, 'full': []}
+            self.save_runs(); return self.runs[aid]
         if self.ctl is rule_controller: host = ToolHostV5(e, aid, CAT); rec = run(host, self.ctl)
         else: rec, host = run_hybrid(lambda g: ToolHostV5(e, aid, CAT, guards=g), self.ctl, {*DEFAULT_GUARDS, 'dense'})
         last = lambda tool: next((h for h in reversed(rec['trace']) if h['tool'] == tool and 'error' not in h['result']), None)
@@ -162,16 +195,80 @@ class Demo:
         if pid not in CAT: raise ValueError('알 수 없는 프로젝트')
         e = self.engine(); a = e.data['assets'][aid]
         a.update(project=pid, reason='user answer'); e.save()
-        self.runs.setdefault(aid, {})['answered'] = pid; self.save_runs()
+        r = self.runs.setdefault(aid, {}); r['answered'] = pid; self.learn_source(a, pid)
+        folder = e.data.get('folders', {}).get(pid)
+        if folder:  # learn from the answer: the model appends a note to the project's _project.md
+            prof = Path(folder).expanduser() / '_project.md'
+            try: text = content(e.path(a['path'])) if Path(a['path']).suffix.lower() in TEXT | IMAGE else ''
+            except Exception: text = ''
+            note, trace = learn(None if self.ctl is rule_controller else self.ctl, prof, Path(a['original']).name, CAT[pid]['name'], text)
+            r['learned'] = {'note': note, 'trace': trace}
+            if note: CAT[pid]['profile'] = profile_text(prof)
+        self.save_runs(); return r.get('learned')
 
     def keep(self, aid):
         e = self.engine(); e.data['assets'][aid]['keep'] = True; e.save()
 
     def approve(self, aid, plan):
         # execute() re-plans and refuses if anything changed since the user saw the plan.
-        return self.engine().execute(aid, plan)
+        out = self.engine().execute(aid, plan)
+        a = self.engine().data['assets'][aid]
+        if a['project']: self.learn_source(a, a['project'])  # approving a filing also teaches its download page
+        return out
 
     def undo(self, aid): self.engine().undo(aid)
+
+    # Digest: ask once in a while where the unresolved files go; a plain-language reply becomes a confirmed proposal.
+    digest = None; projects_path = None; new_root = Path.home() / 'Desktop'
+
+    def pending(self):
+        e = self.engine()
+        return [a for a in e.data['assets'].values() if not a.get('context') and not a['project'] and not a['keep']
+                and a['path'] == a['original'] and (self.runs.get(a['id']) or {}).get('status') == 'waiting_user']
+
+    def digest_now(self):
+        e = self.engine(); items = []
+        for n, a in enumerate(self.pending(), 1):
+            try: text = content(e.path(a['path'])) if Path(a['path']).suffix.lower() in TEXT | IMAGE else ''
+            except Exception: text = ''
+            cands = ', '.join(CAT[c]['name'] for c in self.runs[a['id']].get('candidates') or [] if c in CAT)
+            hint = rule_note(Path(a['original']).name, text)[:80] + (f' (후보: {cands})' if cands else '')
+            items.append({'n': n, 'aid': a['id'], 'name': Path(a['original']).name, 'hint': hint})
+        if not items: self.digest = None; return None
+        self.digest = {'items': items, 'asked': time.time(), 'proposal': None}
+        self.events.append({'path': f'정리 안 된 파일 {len(items)}개', 'text': '어디에 넣을지 답장해 주세요'}); self.version += 1
+        notify(f'정리 안 된 파일 {len(items)}개', '어디에 넣을지 한 줄로 답해 주세요 (localhost 화면)')
+        return self.digest
+
+    def digest_reply(self, text):
+        if not self.digest: raise ValueError('물어볼 파일이 없습니다')
+        if self.ctl is rule_controller: raise ValueError('자연어 답장은 --qwen 모델이 필요합니다')
+        cat = {k: {'name': c['name']} for k, c in CAT.items()}
+        prop, trace = parse_reply(self.ctl, self.digest['items'], cat, self.new_root, text)
+        self.digest.update(reply=text, proposal=prop, trace=trace); return self.digest
+
+    def digest_apply(self):
+        d = self.digest
+        if not d or not d.get('proposal'): raise ValueError('확인할 제안이 없습니다')
+        prop = d['proposal']; e = self.engine(); ids = {}
+        for tmp, c in prop['new_projects'].items():
+            folder = Path(c['folder']); pid = 'U_' + c['name'].replace(' ', '_')
+            folder.mkdir(parents=True, exist_ok=True)
+            names = [m['name'] for m in prop['moves'] if m['project_id'] == tmp]
+            if not (folder / '_project.md').exists(): (folder / '_project.md').write_text(guide(c['name'], c['desc'], names))
+            CAT[pid] = {'name': c['name'], 'desc': c['desc'], 'profile': profile_text(folder / '_project.md'), 'keywords': []}
+            e.data['projects'][pid] = 'active'; e.data.setdefault('folders', {})[pid] = str(folder); e.save()
+            if self.projects_path:
+                P = json.loads(self.projects_path.read_text()); P[pid] = {'name': c['name'], 'folder': str(folder), 'desc': c['desc']}
+                self.projects_path.write_text(json.dumps(P, ensure_ascii=False, indent=1))
+            ids[tmp] = pid
+        done = []
+        for m in prop['moves']:
+            pid = ids.get(m['project_id'], m['project_id']); self.answer(m['aid'], pid)  # also appends a learned note
+            plan = self.engine().plan(m['aid'])
+            done.append({'name': m['name'], 'project': pid, **(self.engine().execute(m['aid'], plan) or {} if plan['action'] == 'file' else {'skipped': plan['action']})})
+        for x in prop['leave']: self.keep(x['aid'])
+        self.digest = None; return done
 
 
 STATUS_KO = {'active': '진행 중', 'completed': '완료'}
@@ -182,6 +279,8 @@ def explain(e, a, r, plan):
     """Reasoning steps built only from what the tools actually returned (no invented evidence)."""
     out, full = [], {h['tool']: h for h in r.get('full', [])}
     ev = r.get('evidence')
+    if r.get('decider') == 'source':
+        out.append(f'다운로드 출처 {ev} → 이전에 이 페이지 자료를 {a["project"]} 폴더로 정리함 (학습된 출처 규칙)'); ev = None
     if ev:
         text = content(e.path(a['path'])) if Path(a['path']).suffix.lower() in TEXT | IMAGE else ''
         line = next((i for i, l in enumerate(text.splitlines(), 1) if ev in l), None)
@@ -246,6 +345,9 @@ def serve(demo, port):
                     elif self.path == '/api/keep': out = demo.keep(aid)
                     elif self.path == '/api/approve': out = demo.approve(aid, d.get('plan'))
                     elif self.path == '/api/undo': out = demo.undo(aid)
+                    elif self.path == '/api/digest_now': out = demo.digest_now()
+                    elif self.path == '/api/digest_reply': out = demo.digest_reply(str(d.get('text', ''))[:1000])
+                    elif self.path == '/api/digest_apply': out = demo.digest_apply()
                     elif self.path == '/api/reset': seed(demo.root); demo.runs = {}; demo.events = []; out = 'reset'
                     else: return self.send_error(404)
                 self.reply({'ok': True, 'result': out})
@@ -267,12 +369,15 @@ if __name__ == '__main__':
     ap.add_argument('--adapter', help='LoRA adapter dir for --qwen')
     ap.add_argument('--watch', action='store_true', help='trigger: analyze new files in <root>/downloads and <root>/screenshots')
     ap.add_argument('--inbox', action='append', default=[], help='with --watch: copy new files from this folder in (e.g. ~/Desktop for screenshots)')
+    ap.add_argument('--digest-hours', type=float, default=0, help='ask about unresolved files every N hours while the user is at the Mac (0 = off; the page also has an "ask now" button)')
+    ap.add_argument('--auto-inbox', action='append', default=[], help='like --inbox, but a confident "save to project folder" plan is executed without a click (e.g. the iCloud KCC-inbox for iPhone captures); questions still wait')
+    ap.add_argument('--strict-auto-inbox', action='append', default=[], help='like --inbox, but documents/screenshots are filed without a click when a download-source rule or the rule controller decided (e.g. ~/Downloads, ~/Desktop)')
+    ap.add_argument('--source-rules', help='JSON {page key: project id}; learned from answers/approvals (see sources.py)')
     ap.add_argument('--projects', help="real projects JSON {pid: {name, folder, desc, keywords}} (see build_profiles.py); approved files are filed into each project's folder")
     a = ap.parse_args()
     if a.projects:
         P = json.loads(Path(a.projects).read_text())
-        prof = lambda v: (lambda f: f.read_text()[:2000] if f.exists() else '')(Path(v['folder']).expanduser() / '_project.md')
-        CAT = {k: {'name': v['name'], 'desc': v['desc'], 'profile': prof(v), 'keywords': v.get('keywords', [])} for k, v in P.items()}
+        CAT = {k: {'name': v['name'], 'desc': v['desc'], 'profile': profile_text(Path(v['folder']) / '_project.md'), 'keywords': v.get('keywords', [])} for k, v in P.items()}
         e = Lifecycle(a.root)  # real mode: no demo seed; the watcher fills downloads/ and screenshots/
         for d in ('downloads', 'screenshots'): (Path(a.root) / d).mkdir(exist_ok=True)
         e.data['projects'].update({k: 'active' for k in P}); e.data['folders'] = {k: v['folder'] for k, v in P.items()}; e.save()
@@ -284,5 +389,17 @@ if __name__ == '__main__':
     else:
         ctl, name = rule_controller, '규칙 controller (GPU 없이 실행)'
     demo = Demo(a.root, ctl, name); demo.watching = a.watch
-    if a.watch: Watcher(demo, a.inbox).start()
+    if a.source_rules: demo.rules = Rules(a.source_rules)
+    if a.watch: Watcher(demo, a.inbox, auto_inboxes=a.auto_inbox, strict_inboxes=a.strict_auto_inbox).start()
+    if a.projects: demo.projects_path = Path(a.projects)
+    if a.digest_hours:
+        def ticker():
+            last = time.time()
+            while True:
+                time.sleep(60)
+                if time.time() - last >= a.digest_hours * 3600 and user_active():
+                    with demo.lock:
+                        if demo.pending() and not demo.digest: demo.digest_now()
+                    last = time.time()
+        threading.Thread(target=ticker, daemon=True).start()
     serve(demo, a.port)

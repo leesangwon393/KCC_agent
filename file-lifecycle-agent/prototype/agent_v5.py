@@ -6,15 +6,39 @@ from lifecycle_v3 import tokens
 
 SYSTEM=(Path(__file__).parent/'agent_specs/system_v5.md').read_text()
 WEIGHTS={'.pt','.pth','.bin','.ckpt','.safetensors'}
-TEXT={'.txt','.md','.csv','.yaml','.json','.py'}
+DOCS={'.pdf','.docx','.pptx','.ipynb'}  # lecture material: text extracted locally (pdftotext, textutil, zip XML, notebook JSON)
+TEXT={'.txt','.md','.csv','.yaml','.json','.py'}|DOCS
 IMAGE={'.png','.jpg','.jpeg','.heic'}  # screenshots: read through macOS Vision OCR, then handled like text
 OCR_BIN=Path(__file__).parent/'bin/ocr'  # built from ocr.swift: swiftc -O ocr.swift -o bin/ocr
 _ocr_cache={}
 
+def doc_text(p):
+    """Text of a PDF/DOCX/PPTX/notebook with local tools only (nothing leaves the Mac)."""
+    import subprocess,zipfile,html
+    s=p.suffix.lower()
+    try:
+        if s=='.pdf':r=subprocess.run(['pdftotext','-l','8','-enc','UTF-8',str(p),'-'],capture_output=True,text=True,timeout=60)
+        elif s=='.docx':r=subprocess.run(['textutil','-convert','txt','-stdout',str(p)],capture_output=True,text=True,timeout=60)
+        elif s=='.pptx':
+            with zipfile.ZipFile(p) as z:
+                slides=sorted((n for n in z.namelist() if re.fullmatch(r'ppt/slides/slide\d+\.xml',n)),key=lambda n:int(re.findall(r'\d+',n)[-1]))
+                return '\n'.join(html.unescape(' '.join(re.findall(r'<a:t>([^<]*)</a:t>',z.read(n).decode('utf-8','replace')))) for n in slides)
+        elif s=='.ipynb':
+            nb=json.loads(p.read_text(errors='replace'))
+            return '\n'.join(''.join(c.get('source',[])) for c in nb.get('cells',[]))
+        else:return p.read_text(errors='replace')
+    except (OSError,subprocess.TimeoutExpired,zipfile.BadZipFile,ValueError) as e:raise ToolError(f'cannot extract text: {e}')
+    if r.returncode:raise ToolError('text extraction failed: '+r.stderr[:200])
+    return r.stdout
+
 def content(p):
-    """Text of a readable file; images are OCR'd once per (path, mtime)."""
+    """Text of a readable file; images are OCR'd and documents extracted once per (path, mtime)."""
     p=Path(p)
-    if p.suffix.lower() not in IMAGE:return p.read_text(errors='replace')
+    if p.suffix.lower() not in IMAGE|DOCS:return p.read_text(errors='replace')
+    if p.suffix.lower() in DOCS:
+        key=('doc',str(p),p.stat().st_mtime_ns)
+        if key not in _ocr_cache:_ocr_cache[key]=doc_text(p)
+        return _ocr_cache[key]
     key=(str(p),p.stat().st_mtime_ns)
     if key not in _ocr_cache:
         import subprocess
@@ -293,6 +317,9 @@ def rule_controller(hist):
     act=lambda t,**a:{'tool':t,'arguments':a,'reason':'rule'}
     info=_last(hist,'inspect_file')
     if not info:return act('inspect_file')
+    bad=[h for h in hist if h['tool']=='assign_project' and 'error' in h['result']]
+    if bad and not any(h['tool']=='assign_project' and 'error' not in h['result'] for h in hist):  # host rejected its quote: ask, don't loop
+        return act('ask_user',question='어느 프로젝트 자료인지 확인해 주세요.',candidate_ids=[bad[-1]['arguments']['project_id']])
     if any(h['tool']=='assign_project' and 'error' not in h['result'] for h in hist):
         if not _last(hist,'check_references'):return act('check_references')
         if not _last(hist,'preview_plan'):return act('preview_plan')
@@ -312,11 +339,15 @@ def rule_controller(hist):
     if not text.strip():return act('ask_user',question='읽을 수 있는 내용이 없습니다. 어느 프로젝트 자료인가요?',candidate_ids=[])  # e.g. a photo with no OCR text
     m=re.search(r'project_id:\s*([A-Z0-9_]+)',text)
     if m:return act('assign_project',project_id=m.group(1),evidence=m.group(0))
-    if reads[-1]['truncated'] and len(reads)<4:return act('read_content',offset=reads[-1]['next_offset'])
-    found=_last(hist,'search_projects')
-    if found is None:return act('search_projects',query=text[-600:])
-    c=found['candidates']
-    if c and c[0]['score']>=2 and (len(c)==1 or c[0]['score']>c[1]['score']):
+    if reads[-1]['truncated'] and len(reads)<MAX_PAGES:return act('read_content',offset=reads[-1]['next_offset'])  # same limit as the read-through guard
+    searches=[h for h in hist if h['tool']=='search_projects' and 'error' not in h['result']]
+    if not searches:return act('search_projects',query=text[-600:])
+    c=searches[-1]['result']['candidates']
+    sure=c and c[0]['score']>=2 and (len(c)==1 or c[0]['score']>c[1]['score'])
+    head=text[:300]
+    # Documents put the course/project title first (e.g. "생산운영관리 HW1"); try the head once before asking.
+    if not sure and len(searches)==1 and head.strip() and head!=text[-600:]:return act('search_projects',query=head)
+    if sure:
         cat=c[0]['name']+' '+c[0]['desc']
         line=max((l for l in text.splitlines() if l.strip()),key=lambda l:score(l,cat))
         return act('assign_project',project_id=c[0]['project_id'],evidence=line.strip())

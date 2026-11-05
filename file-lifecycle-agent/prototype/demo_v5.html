@@ -21,6 +21,7 @@ code{font-size:12px;background:#f1f5f9;padding:1px 4px;border-radius:4px}@media(
 <div id="msg" role="status"></div>
 <div class="bar"><button class="primary" id="all">전체 분석</button><button id="bulk">보관 권장 일괄 승인</button><button id="reset" class="danger">데모 폴더 초기화</button><span class="sub" id="root"></span></div>
 <div class="stats" id="stats"></div>
+<div class="panel" id="digest" style="margin-bottom:14px"></div>
 <div class="bar"><input id="q" placeholder="파일명·프로젝트 검색" aria-label="파일명 또는 프로젝트 검색"><span class="sub" id="dist"></span></div>
 <div class="grid"><div id="cards"></div>
 <aside><div class="panel"><b>프로젝트</b><table id="cat"></table></div><div class="panel" style="margin-top:12px"><b>실행 기록 (저널)</b><table id="journal"></table></div></aside></div>
@@ -41,8 +42,30 @@ function render(){
  $('#ctl').textContent='CONTROLLER · '+S.controller;$('#root').textContent='폴더: '+S.root;
  $('#cat').innerHTML=S.catalog.map(c=>`<tr><td><b>${esc(c.id)}</b><br><span class="sub">${esc(c.name)}</span></td><td><span class="tag ${c.status==='completed'?'archive':'keep'}">${c.status==='completed'?'완료':'진행 중'}</span></td></tr>`).join('');
  $('#journal').innerHTML=S.journal.slice().reverse().map(j=>`<tr><td>${esc(j.src)} → ${esc(j.dst)}</td><td>${esc(JS[j.state]||j.state)}</td></tr>`).join('')||'<tr><td class="sub" colspan="2" style="text-align:left">아직 이동 없음</td></tr>';
+ digest();
  $('#cards').innerHTML=S.assets.filter(a=>(F==='all'||bucket(a)===F)&&(!q||(a.original+' '+(a.project||'')).toLowerCase().includes(q))).map(card).join('')||'<p class="sub">조건에 맞는 파일이 없습니다.</p>';
 }
+function digest(){
+ const d=S.digest,el=$('#digest');
+ if(!d){el.innerHTML=`<b>모아서 물어보기</b> <span class="sub">확인이 필요한 파일 ${S.pending}개</span> <button id="dnow" ${S.pending?'':'disabled'}>지금 물어보기</button>`;return}
+ const it=d.items.map(x=>`<li><b>${esc(x.name)}</b> <span class="sub">${esc(x.hint)}</span></li>`).join('');
+ let h=`<b>이 파일들은 어디에 넣을까요?</b><ol>${it}</ol>`;
+ if(!d.proposal)h+=`<div class="bar"><input id="dtext" style="flex:1;border:1px solid #ccd4e2;border-radius:8px;padding:7px 10px;font:inherit" placeholder="예: 1,2는 강화학습 수업 폴더 새로 만들어서 넣고 3은 취준, 나머지는 그냥 둬"><button class="primary" id="dsend">답장</button></div>`;
+ else{const P=d.proposal,nm=id=>P.new_projects[id]?`새 폴더 ${P.new_projects[id].name}`:name(id);
+  h+=`<div class="ev"><b>답장:</b> ${esc(d.reply)}</div><b>에이전트가 이렇게 정리할게요</b><ul>`+
+   Object.values(P.new_projects).map(c=>`<li>📁 새 프로젝트 폴더 <code>${esc(c.folder)}</code> + 에이전트 지침(_project.md): ${esc(c.desc)}</li>`).join('')+
+   P.moves.map(m=>`<li>${m.n}. ${esc(m.name)} → <b>${esc(nm(m.project_id))}</b></li>`).join('')+
+   P.leave.map(m=>`<li>${m.n}. ${esc(m.name)} → 그대로 두기</li>`).join('')+`</ul>`+
+   `<details><summary>모델 도구 호출 ${d.trace.length}회</summary><ol>${d.trace.map(t=>`<li><code>${esc(t.tool??'형식 오류')}(${esc(JSON.stringify(t.arguments))})</code> <span class="${t.result.error?'err':'sub'}">${esc(JSON.stringify(t.result))}</span></li>`).join('')}</ol></details>`+
+   `<div class="actions"><button class="primary" id="dapply" ${P.moves.length||P.leave.length?'':'disabled'}>이대로 정리</button><button id="dredo">다시 답장</button></div>`}
+ el.innerHTML=h;
+}
+$('#digest').onclick=async e=>{const id=e.target.id;try{
+ if(id==='dnow'){msg('모으는 중…');await post('/api/digest_now')}
+ else if(id==='dsend'){const t=$('#dtext').value.trim();if(!t)return;msg('답장을 해석하는 중… (Qwen)');await post('/api/digest_reply',{text:t})}
+ else if(id==='dredo'){S.digest.proposal=null;digest();return}
+ else if(id==='dapply'){msg('정리하는 중…');const r=await post('/api/digest_apply');msg(`정리 완료 ${r.length}개`);await load();return}
+ else return;msg('');await load()}catch(err){msg('거절됨: '+err.message);await load()}};
 function card(a){
  const r=a.run,p=a.plan,tags=[],body=[],acts=[];
  if(a.archived){tags.push('<span class="tag done">보관됨</span>');body.push(`<p class="sub">현재 위치: <code>${esc(a.path)}</code></p>`);acts.push(['undo','되돌리기'])}
