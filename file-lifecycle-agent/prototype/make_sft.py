@@ -57,7 +57,9 @@ def oracle(task, gold, catalog, guards=True):
             call('assign_project', project_id=gold['project'], evidence=gold['evidence'])
             call('check_references'); call('preview_plan'); call('finish')
         else:
-            c = gold.get('candidates') or []
+            found = next((x['result']['candidates'] for x in h.history if x['tool'] == 'search_projects'), [])
+            # Dense search: ask with the projects it flags as close (a superset of the gold tie in every training case).
+            c = [x['project_id'] for x in found if x.get('close')] or gold.get('candidates') or []
             q = '이 파일이 어느 프로젝트 자료인지 확인해 주세요.' + (f' 후보: {", ".join(c)}' if c else ' 근거가 없습니다.')
             call('ask_user', question=q, candidate_ids=c)
         return h.history
