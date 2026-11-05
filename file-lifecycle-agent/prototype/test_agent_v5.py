@@ -97,4 +97,21 @@ class V5(unittest.TestCase):
         model=lambda hist:seen.append(len(hist)) or A('inspect_file') if not hist else A('ask_user',question='q',candidate_ids=[])
         rec,h=run_hybrid(lambda g:ToolHostV5(e,t['asset'],t['catalog'],guards=g),model,DEFAULT_GUARDS)
         self.assertEqual(rec['decider'],'model');self.assertEqual(seen[0],0);self.assertIn('rule_trace',rec)  # model starts on an empty history
+    def test_empty_text_asks_instead_of_looping(self):
+        import tempfile;from pathlib import Path as P
+        d=P(tempfile.mkdtemp());(d/'downloads').mkdir();(d/'downloads'/'blank.txt').write_text('   \n')
+        e=Lifecycle(d);e.data['projects'].update({'A1':'active','B2':'active'});e.save();aid=e.ingest('downloads/blank.txt')
+        r=run(ToolHostV5(e,aid,{'A1':{'name':'a','desc':'x'},'B2':{'name':'b','desc':'y'}}),rule_controller)
+        self.assertEqual(r['status'],'waiting_user')
+    def test_file_action_moves_into_registered_folder_and_undoes(self):
+        import tempfile;from pathlib import Path as P
+        base=P(tempfile.mkdtemp());ws=base/'ws';proj=base/'Desktop'/'POM';proj.mkdir(parents=True);(ws/'downloads').mkdir(parents=True)
+        (ws/'downloads'/'lec3.txt').write_text('project_id: POM\n수요 예측')
+        e=Lifecycle(ws);e.data['projects']['POM']='active';e.data['folders']={'POM':str(proj)};e.save();aid=e.ingest('downloads/lec3.txt')
+        e.data['assets'][aid]['project']='POM';plan=e.plan(aid)
+        self.assertEqual((plan['action'],plan['target']),('file',str((proj/'lec3.txt').resolve())))
+        self.assertTrue(e.execute(aid,plan));self.assertTrue((proj/'lec3.txt').exists());self.assertFalse((ws/'downloads'/'lec3.txt').exists())
+        e.undo(aid);self.assertTrue((ws/'downloads'/'lec3.txt').exists());self.assertFalse((proj/'lec3.txt').exists())
+        with self.assertRaises(ValueError):e.path(str(base/'elsewhere.txt'))  # only registered folders are reachable
+        (proj/'lec3.txt').write_text('other');self.assertEqual(e.plan(aid)['action'],'defer')  # never overwrite
 if __name__=='__main__':unittest.main()

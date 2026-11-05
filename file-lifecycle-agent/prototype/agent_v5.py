@@ -25,10 +25,31 @@ def content(p):
     return _ocr_cache[key]
 CHUNK=1200
 # Host guards, individually switchable for ablation. 'quote' is the original v5 grounding check.
-GUARDS=('quote','instruction','support','read_through','redact','fuzzy','stopwords','shared_weights','dense')
-DEFAULT_GUARDS=tuple(g for g in GUARDS if g!='dense')  # 'dense' needs torch + bge-m3, so it is opt-in
+GUARDS=('quote','instruction','support','read_through','redact','fuzzy','stopwords','shared_weights','dense','rerank')
+DEFAULT_GUARDS=tuple(g for g in GUARDS if g not in ('dense','rerank'))  # 'dense' needs torch + bge-m3, so it is opt-in
 DENSE_MARGIN=0.10  # tuned on collected batches 1-4 (not the held-out batch_t*): 43/59 singled out, 1 wrong top-1
 _dense=None
+
+_rerank=None
+def rerank_scores(query,docs):
+    """bge-reranker-v2-m3 relevance (sigmoid), loaded once."""
+    global _rerank
+    import torch
+    if _rerank is None:
+        from transformers import AutoTokenizer,AutoModelForSequenceClassification
+        hub=Path.home()/'.cache/huggingface/hub/models--BAAI--bge-reranker-v2-m3/snapshots'
+        path=next(str(x) for x in hub.glob('*') if (x/'tokenizer.json').exists())
+        dev='cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
+        _rerank=(AutoTokenizer.from_pretrained(path),AutoModelForSequenceClassification.from_pretrained(path).to(dev).eval(),dev)
+    tok,m,dev=_rerank
+    with torch.no_grad():
+        x=tok([[query[:500],d] for d in docs],padding=True,truncation=True,max_length=512,return_tensors='pt').to(dev)
+        return torch.sigmoid(m(**x).logits[:,0]).tolist()
+
+def semantic_doc(c):
+    """Text for bge-m3/reranker: name + desc + the folder's _project.md (profile) + mined keywords. Lexical matching (rule,
+    support) uses only name + desc, because profile/keywords are long and noisy (generic words like 실험/평가 prefix-match)."""
+    return ' '.join([c['name'],c['desc'],c.get('profile',''),*c.get('keywords',[])])
 
 def dense_scores(query,docs):
     """bge-m3 dense cosine (CLS pooling), loaded once."""
@@ -141,7 +162,7 @@ class ToolHostV5:
         lex=sorted(k for k,v in sc.items() if v==top and v>0)
         if 'dense' in self.guards and len(lex)!=1 and len(self.catalog)>1:
             # Lexical overlap failed (English, paraphrase, compound): accept a clear semantic top-1.
-            ids=list(self.catalog);d=sorted(zip(dense_scores(ev,[self.catalog[k]['name']+' '+self.catalog[k]['desc'] for k in ids]),ids),reverse=True)
+            ids=list(self.catalog);d=sorted(zip(dense_scores(ev,[semantic_doc(self.catalog[k]) for k in ids]),ids),reverse=True)
             if d[0][0]-d[1][0]>=DENSE_MARGIN:return [d[0][1]]
         return lex
     def call(self,name,args):
@@ -167,8 +188,14 @@ class ToolHostV5:
         if name=='search_projects':
             if not args['query'].strip():raise ToolError('empty query')
             if 'dense' in self.guards:
-                ids=list(self.catalog);ds=dense_scores(args['query'],[self.catalog[k]['name']+' '+self.catalog[k]['desc'] for k in ids])
+                ids=list(self.catalog);ds=dense_scores(args['query'],[semantic_doc(self.catalog[k]) for k in ids])
                 hits=sorted(((round(s,3),pid) for s,pid in zip(ds,ids)),key=lambda x:(-x[0],x[1]))
+                if 'rerank' in self.guards:  # reorder the dense top-10; the close flag below stays on the cosine scores it was trained on
+                    top=hits[:10];rr=rerank_scores(args['query'],[semantic_doc(self.catalog[p]) for _,p in top])
+                    hits=[h for _,h in sorted(zip(rr,top),key=lambda x:-x[0])]
+                    cos=dict((p,s) for s,p in top);best=max(cos[p] for _,p in hits[:3])
+                    close=[p for _,p in hits[:3] if best-cos[p]<DENSE_MARGIN];close=close if len(close)>1 else []
+                    return {'candidates':[{'project_id':pid,'name':self.catalog[pid]['name'],'desc':self.catalog[pid]['desc'],'score':s,**({'close':True} if pid in close else {})} for s,pid in hits[:3]]}
                 # Cosines hide ties, so mark every project within DENSE_MARGIN of the top one (the same margin support() needs to single one out).
                 # Capped at the top 3: in a 15-project catalog cosines bunch up and an uncapped flag marked 6-15 projects.
                 close=[pid for s,pid in hits[:3] if hits[0][0]-s<DENSE_MARGIN]
@@ -282,6 +309,7 @@ def rule_controller(hist):
         if any(h['tool']=='read_content' for h in hist):return act('ask_user',question='파일을 읽지 못했습니다. 어느 프로젝트 자료인가요?',candidate_ids=[])
         return act('read_content',offset=0)
     text=''.join(r['text'] for r in reads)
+    if not text.strip():return act('ask_user',question='읽을 수 있는 내용이 없습니다. 어느 프로젝트 자료인가요?',candidate_ids=[])  # e.g. a photo with no OCR text
     m=re.search(r'project_id:\s*([A-Z0-9_]+)',text)
     if m:return act('assign_project',project_id=m.group(1),evidence=m.group(0))
     if reads[-1]['truncated'] and len(reads)<4:return act('read_content',offset=reads[-1]['next_offset'])

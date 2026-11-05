@@ -88,9 +88,12 @@ class Watcher(threading.Thread):
         for p, copy_to in list(self.candidates()):
             if not self.stable(p): continue
             if copy_to:
-                self.seen.add(p)
-                if p.stat().st_size > 50 << 20 or copy_to.exists(): continue  # shortcut: skips >50MB and name clashes
-                copy_to.parent.mkdir(exist_ok=True); shutil.copy2(p, copy_to); continue  # analyzed on the next tick
+                if p.stat().st_size > 50 << 20: self.seen.add(p); continue  # shortcut: skips >50MB
+                if copy_to.exists(): copy_to = copy_to.with_stem(f'{copy_to.stem}_{time.strftime("%Y%m%d_%H%M%S")}')  # iPhone names repeat
+                copy_to.parent.mkdir(exist_ok=True)
+                try: shutil.copy2(p, copy_to)
+                except OSError: copy_to.unlink(missing_ok=True); continue  # iCloud file not downloaded yet: retry next tick
+                self.seen.add(p); continue  # analyzed on the next tick
             rel = str(p.relative_to(self.d.root))
             if rel in known: continue
             with self.d.lock:
@@ -98,7 +101,7 @@ class Watcher(threading.Thread):
                 try: r = self.d.analyze(aid); r['trigger'] = 'watch'; self.d.save_runs()
                 except Exception as exc: r = {'status': f'error: {exc}', 'project': None}
                 a = self.d.engine().data['assets'][aid]; plan = self.d.engine().plan(aid) if a['project'] else None
-                text = (f'{r["project"]} 자료 · ' + {'archive': '보관 권장', 'keep': '유지 권장', 'defer': '보류'}[plan['action']]) if plan \
+                text = (f'{r["project"]} 자료 · ' + {'file': '폴더 저장 권장', 'archive': '보관 권장', 'keep': '유지 권장', 'defer': '보류'}[plan['action']]) if plan \
                     else '어느 프로젝트인지 확인이 필요해요' if r['status'] == 'waiting_user' else str(r['status'])
                 self.d.events.append({'path': rel, 'text': text}); self.d.events = self.d.events[-20:]; self.d.version += 1
             notify(f'새 파일: {p.name}', text)
@@ -172,7 +175,7 @@ class Demo:
 
 
 STATUS_KO = {'active': '진행 중', 'completed': '완료'}
-PLAN_KO = {'archive': '보관 권장', 'keep': '유지 권장', 'defer': '보류'}
+PLAN_KO = {'file': '폴더 저장 권장', 'archive': '보관 권장', 'keep': '유지 권장', 'defer': '보류'}
 
 
 def explain(e, a, r, plan):
@@ -264,8 +267,16 @@ if __name__ == '__main__':
     ap.add_argument('--adapter', help='LoRA adapter dir for --qwen')
     ap.add_argument('--watch', action='store_true', help='trigger: analyze new files in <root>/downloads and <root>/screenshots')
     ap.add_argument('--inbox', action='append', default=[], help='with --watch: copy new files from this folder in (e.g. ~/Desktop for screenshots)')
+    ap.add_argument('--projects', help="real projects JSON {pid: {name, folder, desc, keywords}} (see build_profiles.py); approved files are filed into each project's folder")
     a = ap.parse_args()
-    if not (Path(a.root) / 'manifest.json').exists(): seed(a.root)
+    if a.projects:
+        P = json.loads(Path(a.projects).read_text())
+        prof = lambda v: (lambda f: f.read_text()[:2000] if f.exists() else '')(Path(v['folder']).expanduser() / '_project.md')
+        CAT = {k: {'name': v['name'], 'desc': v['desc'], 'profile': prof(v), 'keywords': v.get('keywords', [])} for k, v in P.items()}
+        e = Lifecycle(a.root)  # real mode: no demo seed; the watcher fills downloads/ and screenshots/
+        for d in ('downloads', 'screenshots'): (Path(a.root) / d).mkdir(exist_ok=True)
+        e.data['projects'].update({k: 'active' for k in P}); e.data['folders'] = {k: v['folder'] for k, v in P.items()}; e.save()
+    elif not (Path(a.root) / 'manifest.json').exists(): seed(a.root)
     if a.qwen:
         from qwen_tool_controller import QwenToolController
         from agent_v5 import SPECS, SYSTEM
