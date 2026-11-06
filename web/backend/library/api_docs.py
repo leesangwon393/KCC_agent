@@ -129,7 +129,9 @@ def complete_schema(result, generator, request, public):
         folder_state, errors=((403, '로컬 로그인 필요'), (404, '로컬 설치 아님')))
     add('/api/v1/local/folders/', 'post', '로컬 설정', '선택한 Mac 폴더의 QWEN 지침 생성 시작',
         'Mac 기본 선택창에서 받은 1~20개 폴더의 파일 이름을 Mac에서 분석해 _project.md를 작성합니다. 기존 지침은 보존합니다. 모든 지침이 준비된 뒤에만 분류 폴더 설정을 교체합니다. 본문 전송이나 파일 이동은 수행하지 않습니다.',
-        folder_state, obj({'folders': {'type': 'array', 'items': STRING, 'minItems': 1, 'maxItems': 20}}, ('folders',)),
+        folder_state, obj({'folders': {'type': 'array', 'items': STRING, 'minItems': 1, 'maxItems': 20},
+                           'mode': {'type': 'string', 'enum': ['replace', 'add'], 'default': 'replace',
+                                    'description': 'add는 기존 폴더를 보존하고 추가합니다. 연결 계정은 변경하지 않습니다.'}}, ('folders',)),
         ((400, '폴더 선택 오류'), (403, '로컬 로그인 또는 CSRF 필요'), (404, '로컬 설치 아님'), (409, '이미 생성 중'), (503, '작업 시작 실패')))
     folder_responses = result['paths']['/api/v1/local/folders/']['post']['responses']
     folder_responses['202'] = folder_responses.pop('200')

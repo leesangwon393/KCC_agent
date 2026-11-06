@@ -6,9 +6,13 @@ final class FolderSelection: NSObject {
     private let alert = NSAlert()
     private let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 520, height: 250))
 
-    func choose() -> [String]? {
+    private var adding = false
+
+    func choose(adding: Bool = false, creating: Bool = false) -> [String]? {
+        self.adding = adding
         alert.messageText = "처음 사용할 폴더를 설정해요"
-        alert.informativeText = "‘폴더 추가’로 여러 위치의 폴더를 차례로 담으세요. 모두 고른 뒤 완료하면 QWEN이 폴더별 정리 지침을 만듭니다. 최대 20개까지 추가할 수 있어요."
+        alert.informativeText = (creating ? "선택창의 ‘새로운 폴더’로 폴더를 만든 뒤 그 폴더를 선택하세요. 지침 준비 후 웹에서 이 폴더를 골라 파일의 답변을 보내세요.\n" : "") + (adding ? "기존 폴더와 지침은 유지됩니다. 새로 추가할 폴더를 선택하세요.\n" : "") + "‘폴더 추가’로 여러 위치의 폴더를 차례로 담으세요. 모두 고른 뒤 완료하면 QWEN이 폴더별 정리 지침을 만듭니다. 최대 20개까지 추가할 수 있어요."
+        if creating { alert.informativeText = "‘폴더 추가’를 누르고 Mac 선택창의 ‘새로운 폴더’로 폴더를 만드세요. 이 파일을 분류할 폴더 하나를 선택하면 QWEN이 지침을 만듭니다. 준비 후 웹에서 새 폴더를 골라 답변을 보내세요. 기존 폴더는 유지됩니다." }
         alert.addButton(withTitle: "선택 완료 · 지침 만들기")
         alert.addButton(withTitle: "폴더 추가")
         alert.addButton(withTitle: "취소")
@@ -28,8 +32,8 @@ final class FolderSelection: NSObject {
             picker.prompt = "목록에 추가"
             picker.canChooseFiles = false
             picker.canChooseDirectories = true
-            picker.allowsMultipleSelection = true
-            picker.canCreateDirectories = false
+            picker.allowsMultipleSelection = !creating
+            picker.canCreateDirectories = true
             guard picker.runModal() == .OK else { continue }
             var next = folders
             var problem: String?
@@ -45,6 +49,10 @@ final class FolderSelection: NSObject {
                     break
                 }
                 next.append(folder)
+                if creating && next.count > 1 {
+                    problem = "이 파일을 분류할 새 폴더 하나만 선택해 주세요."
+                    break
+                }
                 if next.count > 20 {
                     problem = "폴더는 최대 20개까지 추가할 수 있어요. 목록에서 폴더를 뺀 뒤 다시 추가해 주세요."
                     break
@@ -64,7 +72,7 @@ final class FolderSelection: NSObject {
 
     private func render() {
         alert.buttons[0].isEnabled = !folders.isEmpty
-        alert.messageText = "처음 사용할 폴더 · \(folders.count)개 선택"
+        alert.messageText = "\(adding ? "추가할 폴더" : "처음 사용할 폴더") · \(folders.count)개 선택"
         let height = max(250, folders.count * 62)
         let content = NSView(frame: NSRect(x: 0, y: 0, width: 500, height: height))
         if folders.isEmpty {
@@ -105,12 +113,16 @@ final class HelperApp: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     var message: NSTextField!
     var installing = false
+    var folderManagementRequested = false
+    var createFolderRequested = false
     var ticket: String?
     var process: Process?
     let origin = Bundle.main.object(forInfoDictionaryKey: "MoaOrigin") as? String ?? "https://3.38.192.19"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let menu = NSMenu(); let item = NSMenuItem(); let submenu = NSMenu()
+        let foldersItem = submenu.addItem(withTitle: "폴더 추가…", action: #selector(openFolderManagement), keyEquivalent: "o")
+        foldersItem.target = self
         submenu.addItem(withTitle: "모아 연결 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.submenu = submenu; menu.addItem(item); NSApp.mainMenu = menu
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 460, height: 190), styleMask: [.titled, .closable], backing: .buffered, defer: false)
@@ -127,7 +139,15 @@ final class HelperApp: NSObject, NSApplicationDelegate {
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        guard let url = urls.first, url.scheme == "moa-helper", url.host == "connect",
+        guard let url = urls.first, url.scheme == "moa-helper" else { return }
+        if url.host == "folders", url.fragment == nil, url.path.isEmpty,
+           url.query == nil || url.query == "create=1" {
+            folderManagementRequested = true
+            createFolderRequested = url.query == "create=1"
+            if window != nil && !installing { start() }
+            return
+        }
+        guard url.host == "connect",
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               components.queryItems?.count == 1,
               let value = components.queryItems?.first, value.name == "ticket", let secret = value.value,
@@ -172,7 +192,19 @@ final class HelperApp: NSObject, NSApplicationDelegate {
         } catch { installing = false; message.stringValue = "연결 프로그램을 실행하지 못했어요. 앱을 다시 열어 주세요." }
     }
 
+    @objc func openFolderManagement() {
+        guard !installing else { return }
+        folderManagementRequested = true
+        start()
+    }
+
     func finish() {
+        let data = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Moa")
+        if ticket == nil && (folderManagementRequested || FileManager.default.fileExists(atPath: data.appendingPathComponent("icloud.json").path)) {
+            folderManagementRequested = false
+            manageFolders()
+            return
+        }
         guard let secret = ticket else {
             message.stringValue = "준비가 끝났어요. 모아 웹앱에서 ‘설치한 앱으로 Mac 연결하기’를 눌러 주세요."
             return
@@ -221,29 +253,76 @@ final class HelperApp: NSObject, NSApplicationDelegate {
         }
     }
 
-    func connect(secret: String, folders: [String]) throws {
+    func manageFolders() {
+        installing = true
+        let creating = createFolderRequested
+        createFolderRequested = false
+        guard let folders = FolderSelection().choose(adding: true, creating: creating) else {
+            installing = false
+            message.stringValue = "폴더 추가를 취소했어요. 기존 설정은 유지됩니다."
+            return
+        }
+        message.stringValue = "추가한 폴더의 QWEN 지침을 준비하고 있어요…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try self.unlockLocal()
+                _ = try self.request("local/folders/", body: ["folders": folders, "mode": "add"], csrf: self.currentCSRF())
+                try self.waitForFolders(count: folders.count, configureInbox: false)
+                DispatchQueue.main.async {
+                    self.installing = false
+                    self.message.stringValue = "폴더 추가가 끝났어요. 모아의 폴더 화면에서 확인하세요."
+                    let done = NSAlert()
+                    done.messageText = "폴더를 추가했어요"
+                    done.informativeText = "기존 폴더와 지침은 유지하고 새 폴더를 등록했습니다. 모아 화면에 자동 반영됩니다."
+                    done.addButton(withTitle: "확인")
+                    done.runModal()
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.installing = false
+                    self.message.stringValue = "폴더를 추가하지 못했어요. 기존 폴더는 유지됩니다."
+                    let failed = NSAlert()
+                    failed.messageText = "폴더 추가 실패"
+                    failed.informativeText = error.localizedDescription
+                    failed.addButton(withTitle: "확인")
+                    failed.runModal()
+                }
+            }
+        }
+    }
+
+    func currentCSRF() throws -> String {
+        guard let value = try request("auth/session/")["csrf"] as? String else {
+            throw NSError(domain: "MoaHelper", code: 2, userInfo: [NSLocalizedDescriptionKey: "로컬 보안 세션을 시작하지 못했어요."])
+        }
+        return value
+    }
+
+    func unlockLocal() throws {
         let keyURL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Moa/local-key")
         let key = try String(contentsOf: keyURL, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw NSError(domain: "MoaHelper", code: 1, userInfo: [NSLocalizedDescriptionKey: "Mac 연결 프로그램을 다시 설치해 주세요."]) }
-        func currentCSRF() throws -> String {
-            guard let value = try request("auth/session/")["csrf"] as? String else {
-                throw NSError(domain: "MoaHelper", code: 2, userInfo: [NSLocalizedDescriptionKey: "로컬 보안 세션을 시작하지 못했어요."])
-            }
-            return value
-        }
         _ = try request("local/unlock/", body: [:], csrf: currentCSRF(), localKey: key)
+    }
+
+    func connect(secret: String, folders: [String]) throws {
+        try unlockLocal()
         _ = try request("local/folders/", body: ["folders": folders], csrf: currentCSRF())
         if let _ = try request("local/setup/")["cloud_origin"] as? String {
             _ = try request("local/cloud/disconnect/", body: [:], csrf: currentCSRF())
         }
         _ = try request("local/cloud/connect/", body: ["origin": origin, "pairing_secret": secret], csrf: currentCSRF())
+        try waitForFolders(count: folders.count, configureInbox: true)
+    }
+
+    func waitForFolders(count: Int, configureInbox: Bool) throws {
         let deadline = Date().addingTimeInterval(3600)
         while Date() < deadline {
             let progress = try request("local/folders/")
             let state = progress["status"] as? String ?? "failed"
             if state == "completed" {
-                _ = try request("local/setup/", body: [:], csrf: currentCSRF())
+                if configureInbox { _ = try request("local/setup/", body: [:], csrf: currentCSRF()) }
                 return
             }
             if state == "failed" {
@@ -253,7 +332,7 @@ final class HelperApp: NSObject, NSApplicationDelegate {
             let folder = progress["folder"] as? String ?? ""
             DispatchQueue.main.async {
                 self.message.stringValue = state == "generating"
-                    ? "QWEN이 지침을 작성하고 있어요. \(completed + 1)/\(folders.count)\n\(folder)"
+                    ? "QWEN이 지침을 작성하고 있어요. \(completed + 1)/\(count)\n\(folder)"
                     : "QWEN을 Mac에 준비하고 있어요. 처음에는 모델 다운로드로 시간이 걸릴 수 있어요."
             }
             Thread.sleep(forTimeInterval: 2)

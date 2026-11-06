@@ -154,7 +154,8 @@ class Watcher(threading.Thread):
         return p, str(p.relative_to(self.d.root))
 
     def tick(self):
-        known = {a['original'] for a in self.d.engine().data['assets'].values()}
+        with self.d.lock:
+            known = {a['original'] for a in self.d.engine().data['assets'].values()}
         for p, copy_to in list(self.candidates()):
             if not self.stable(p): continue
             if copy_to:
