@@ -114,11 +114,11 @@
     .steps .badge{width:38px;height:38px;font-size:18px}
 
     /* 10 metrics */
-    .metrics{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:28px}
+    .metrics{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px}
     .metrics .card{display:flex;align-items:center;gap:28px;padding:20px 30px}
     .metrics h3{font-size:20px;margin:0;color:var(--muted);width:130px}.metrics .num{font-size:60px;font-weight:800;letter-spacing:-.05em;line-height:1}.metrics .num small{font-size:30px;letter-spacing:0}.metrics p{font-size:19px;margin:0 0 0 auto;color:var(--muted)}
     .metrics .after .num{color:var(--accent)}
-    .train{display:grid;grid-template-columns:1fr 1.03fr;gap:24px;margin-top:20px}
+    .train{display:grid;grid-template-columns:1fr 1.03fr;gap:24px;margin-top:28px}
     .train .figure{padding:12px}.train figcaption{font-size:16px;font-weight:700;color:var(--muted);margin:2px 4px 10px}.train img{height:350px;width:100%;object-fit:contain;object-position:left top;border-radius:10px}
 
     /* 12 web */
@@ -280,13 +280,13 @@
     <div class="topline"><span class="kicker">04 / Model</span><span class="tag peach">Qwen3-1.7B + LoRA</span></div>
     <h2 class="title">먼저 개선한 것은 도구 호출의 안정성</h2>
     <p class="lead">수집 평가 27건에서 ToolHost가 받아들인 호출 비율</p>
-    <div class="metrics">
-      <div class="card"><h3>학습 전</h3><div class="num">76.9<small>%</small></div><p>허용 가능한 도구 호출</p></div>
-      <div class="card after"><h3>LoRA 학습 후</h3><div class="num">99.3<small>%</small></div><p>반복 호출 37회 → 0회</p></div>
-    </div>
     <div class="train">
       <figure class="figure"><figcaption>학습 데이터 예시 · 캡처 이름 → 카테고리 · 캡션</figcaption><img src="assets/train-data-sample.png" alt="스크린샷 이름, 생성 날짜, 카테고리, 이미지 캡션으로 이루어진 학습 데이터 예시"></figure>
       <figure class="figure"><figcaption>LoRA 학습 손실 · 네 가지 구성</figcaption><img src="assets/lora-loss.png" alt="v1, dense, close, pad 네 가지 학습 구성의 손실 추이 그래프"></figure>
+    </div>
+    <div class="metrics">
+      <div class="card"><h3>학습 전</h3><div class="num">76.9<small>%</small></div><p>허용 가능한 도구 호출</p></div>
+      <div class="card after"><h3>LoRA 학습 후</h3><div class="num">99.3<small>%</small></div><p>반복 호출 37회 → 0회</p></div>
     </div>
     <div class="pagefoot">SOURCE · 프로젝트 README / collected eval 27 / 학습 로그</div>
   </section>
