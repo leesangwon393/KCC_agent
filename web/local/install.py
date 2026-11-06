@@ -38,7 +38,13 @@ def main():
     result = subprocess.run(['launchctl', 'print', domain + '/' + LABEL], capture_output=True)
     if result.returncode:
         subprocess.run(['launchctl', 'bootstrap', domain, str(plist)], check=True)
-    for _ in range(90):
+    for attempt in range(120):
+        # launchd may finish unloading the previous version after bootstrap returns.
+        # Re-register a missing job rather than leaving the first installation stuck.
+        if attempt and attempt % 10 == 0:
+            running = subprocess.run(['launchctl', 'print', domain + '/' + LABEL], capture_output=True)
+            if running.returncode:
+                subprocess.run(['launchctl', 'bootstrap', domain, str(plist)], capture_output=True)
         if (DATA / 'local-key').exists():
             try:
                 with urlopen('http://127.0.0.1:8000/api/v1/health/', timeout=1):

@@ -10,7 +10,7 @@
  const loginArea=document.createElement('div');panel.append(loginArea);
  const pair=document.createElement('button');pair.className='primary';pair.textContent='이 Mac 연결';pair.hidden=true;panel.append(pair);
  const status=document.createElement('p');status.setAttribute('role','status');panel.append(status);
- const helper=document.createElement('p');helper.textContent='처음 한 번 이 Mac에서 “모아 시작.command”를 실행해 연결 도우미를 설치하세요. Mac 연결 화면이 열리지 않으면 설치 후 다시 시도하세요.';panel.append(helper);
+ const helper=document.createElement('p');helper.textContent='처음 한 번 모아 연결 앱을 다운로드해 열어 주세요. 앱이 필요한 프로그램을 자동으로 설치합니다. 이후에는 아래 연결 버튼으로 앱이 실행됩니다.';panel.append(helper);const download=document.createElement('a');download.className='ghost';download.href='/downloads/moa-mac-helper.zip';download.download='moa-mac-helper.zip';download.textContent='모아 연결 앱 다운로드';panel.append(download);
  const dock=document.createElement('button');dock.className='ghost';dock.textContent='Dock에 추가 안내';dock.onclick=()=>alert('Safari에서 이 AWS 사이트를 연 뒤 파일 → Dock에 추가를 선택하고 이름을 “모아 AWS”로 지정하세요. Mac 연결 후에도 연결 도우미가 실행 중이어야 파일 상태가 갱신됩니다.');panel.append(dock);
  try{
   const config=await fetch('/api/v1/auth/config/',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json()});
@@ -36,10 +36,10 @@
     const session=await fetch('/api/v1/auth/session/',{credentials:'same-origin',cache:'no-store'}).then(r=>r.json());
     const r=await fetch('/api/v1/agent/pairing/',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':session.csrf},body:'{}'});
     const data=await r.json();if(!r.ok)throw Error(data.detail||'로그인 후 다시 연결하세요.');
-    const link=document.createElement('a');link.className='primary';link.textContent='Mac 연결 화면 열기';
-    link.href='http://127.0.0.1:8000/#cloud-pair='+encodeURIComponent(JSON.stringify({origin:location.origin,pairing_secret:data.pairing_secret}));
+    const link=document.createElement('a');link.className='primary';link.textContent='모아 연결 앱 열기';
+    link.href='moa-helper://connect?ticket='+encodeURIComponent(data.pairing_secret);
     link.rel='noreferrer';link.referrerPolicy='no-referrer';
-    status.textContent='아래 링크를 눌러 이 Mac에서 연결을 승인하세요. 링크는 5분간 한 번만 사용할 수 있습니다.';
+    status.textContent='아래 링크를 누르고 연결 앱 열기를 허용해 주세요. 준비 후 연결 승인 화면이 열립니다. 링크는 5분간 유효합니다.';
     panel.querySelector('[data-pair-link]')?.remove();link.dataset.pairLink='true';panel.append(link);
     setTimeout(()=>{link.removeAttribute('href');link.textContent='연결 링크가 만료되었습니다. 이 Mac 연결을 다시 누르세요.'},300000);
    }catch(e){status.textContent=e.message}finally{pair.disabled=false}

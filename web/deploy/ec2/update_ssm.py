@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Deploy the static site and Django API through SSM without an inbound SSH port."""
 
+from concurrent.futures import ThreadPoolExecutor
 import base64
 import hashlib
 import io
@@ -71,19 +72,29 @@ def send(commands, comment):
 def main():
     if not INSTANCE or not PUBLIC_HOST:
         raise SystemExit("Set MOA_EC2_INSTANCE and MOA_PUBLIC_HOST before deployment")
+    # Generate the downloadable helper from this exact source state.
+    subprocess.run([sys.executable, str(ROOT / "local/build_helper.py"), "--origin", "https://" + PUBLIC_HOST], check=True)
     archive = bundle()
     version = hashlib.sha256(archive).hexdigest()[:12]
     encoded = base64.b64encode(archive).decode("ascii")
     parts = [encoded[i:i + 8000] for i in range(0, len(encoded), 8000)]
     print(f"Bundle {len(archive)} bytes, {len(parts)} SSM parts, release {version}", flush=True)
-    send(["mkdir -p /tmp/moa-upload"], "Prepare Moa upload")
-    for index, part in enumerate(parts):
-        send([f"printf '%s' '{part}' > /tmp/moa-upload/{index:03d}.b64"], f"Upload Moa part {index + 1}/{len(parts)}")
-        print(f"Uploaded {index + 1}/{len(parts)}", flush=True)
+    upload_dir = f"/tmp/moa-upload/{version}"
+    send([f"mkdir -p {upload_dir}"], "Prepare Moa upload")
+    groups = [list(enumerate(parts))[i:i + 3] for i in range(0, len(parts), 3)]
+    def upload(group):
+        send([f"printf '%s' '{part}' > {upload_dir}/{index:03d}.b64" for index, part in group],
+             f"Upload Moa parts {group[0][0] + 1}-{group[-1][0] + 1}/{len(parts)}")
+        return len(group)
+    uploaded = 0
+    with ThreadPoolExecutor(max_workers=3) as workers:
+        for count in workers.map(upload, groups):
+            uploaded += count
+            print(f"Uploaded {uploaded}/{len(parts)}", flush=True)
     script = f"""set -euo pipefail
 release=/opt/moa/releases/{version}
 mkdir -p "$release" /var/lib/moa
-cat /tmp/moa-upload/*.b64 | base64 -d | tar -xz -C "$release"
+cat {upload_dir}/*.b64 | base64 -d | tar -xz -C "$release"
 dnf install -y python3.11 python3.11-pip >/tmp/moa-dnf.log 2>&1
 python3.11 -m venv /opt/moa/venv
 /opt/moa/venv/bin/pip install --disable-pip-version-check -q -r "$release/backend/requirements.txt"
