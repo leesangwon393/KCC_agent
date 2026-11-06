@@ -326,3 +326,135 @@ input:focus, select:focus, textarea:focus { border-color: #899c73; box-shadow: 0
 .stats small, .file-meta small, .folder-summary-row span,
 .settings-list small, .story-steps span { color: #707967; }
 .callout p, .note-block { color: #69745b; }
+
+/* Match the repository's Moa wordmark and brand specimen. */
+:root {
+  --font-brand: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --display: var(--font-brand);
+  font-family: var(--font-brand);
+}
+body, button, input, select, textarea,
+.page-heading h1, .intro-hero h1, .story-grid h2,
+.stats strong, .stats strong.status-word, .capsule-decor span {
+  font-family: var(--font-brand);
+}
+.page-heading h1 { font-weight: 700; letter-spacing: -.045em; }
+.intro-hero h1, .story-grid h2 { font-weight: 700; letter-spacing: -.045em; }
+.stats strong { font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.brand {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 0;
+  width: 174px;
+  min-height: 54px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  transform: none;
+  box-shadow: none;
+  line-height: 1;
+}
+.brand img { display: block; width: 100%; height: auto; }
+@media (hover: hover) and (pointer: fine) {
+  .brand:hover { background: transparent; transform: translateY(-1px); opacity: .82; }
+}
+@media (max-width: 760px) {
+  .brand { width: 154px; min-height: 48px; padding: 0; font-size: inherit; }
+  .header-inner { gap: 14px; }
+}
+@media (max-width: 360px) {
+  .brand { width: 136px; }
+  .header-inner { gap: 10px; }
+  .demo-badge { padding: 5px 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .brand:hover { transform: none; } }
+
+/* The folder and wordmark stay fixed; only the two papers gently fan out. */
+.brand .brand-logo { display: block; width: 100%; height: auto; overflow: visible; }
+.brand-paper {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transform: translate(0, 0) rotate(0deg);
+  transition: transform 320ms cubic-bezier(.2, .65, .3, 1);
+}
+@media (hover: hover) and (pointer: fine) {
+  .brand:hover { transform: none; opacity: 1; }
+  .brand:hover .brand-paper-peach { transform: translate(-1.5px, -3px) rotate(-7deg); }
+  .brand:hover .brand-paper-mint { transform: translate(1.5px, -4px) rotate(7deg); }
+}
+.brand:focus-visible .brand-paper-peach { transform: translate(-1.5px, -3px) rotate(-7deg); }
+.brand:focus-visible .brand-paper-mint { transform: translate(1.5px, -4px) rotate(7deg); }
+@media (prefers-reduced-motion: reduce) {
+  .brand .brand-paper { transform: none !important; transition: none !important; }
+}
+
+/* Account actions occupy the top-right corner in every workspace mode. */
+.header-inner > .demo-badge { display: none; }
+.header-account { position: relative; flex: 0 0 auto; margin-left: auto; }
+.header-auth-actions { display: flex; align-items: center; gap: 8px; }
+.header-account button { font-family: var(--font-brand); font-size: 12px; font-weight: 500; line-height: 1.5; }
+.header-login, .header-signup, .header-account-toggle, .header-account-retry {
+  min-height: 38px; padding: 8px 14px; border: 1px solid transparent; border-radius: 9999px;
+  background: transparent; color: #59644f; white-space: nowrap;
+}
+.header-signup { background: #3d4d36; border-color: #3d4d36; color: white; }
+.header-account-toggle { display: flex; align-items: center; gap: 9px; border-color: #d9e0d0; padding: 5px 12px 5px 6px; }
+.account-avatar { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; background: #e1e9d2; color: #5a7046; font-size: 12px; }
+.header-account-panel {
+  position: absolute; z-index: 45; top: calc(100% + 12px); right: 0; width: 260px;
+  padding: 22px; background: #fffefa; border: 1px solid #dfe4d8; border-radius: 20px;
+  box-shadow: 0 12px 36px #24331b12; text-align: left;
+}
+.account-caption { display: block; color: #818a76; font-size: 11px; margin-bottom: 10px; }
+.account-name { display: block; font-size: 15px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.account-username { display: block; font-size: 12px; line-height: 1.6; color: #77816b; margin-top: 4px; overflow-wrap: anywhere; }
+.header-account .account-manage { display: flex; justify-content: space-between; gap: 16px; width: 100%; margin-top: 18px; padding: 14px 0 0; border: 0; border-top: 1px solid #e7ebdf; border-radius: 0; background: transparent; text-align: left; color: #536747; }
+@media (hover: hover) and (pointer: fine) {
+  .header-login:hover, .header-account-toggle:hover, .header-account-retry:hover { background: #e9efdf; border-color: #d4dfc5; }
+  .header-signup:hover { background: #526647; border-color: #526647; transform: translateY(-1px); }
+  .header-account .account-manage:hover { color: #2e4620; }
+}
+@media (min-width:1280px) and (max-width:1399px) {
+  .desktop-nav { display: none; }
+  .menu-toggle { display: block; margin-left: 0; border: 0; background: transparent; color: var(--ink); font-size: 23px; }
+  .mobile-menu { display: grid; position: fixed; z-index: 61; top: 0; right: 0; width: 320px; height: 100dvh; align-content: start; gap: 4px; padding: 80px 15px 20px; background: var(--cream); border-left: 1px solid #dce1d3; }
+  .mobile-menu button { text-align: left; padding: 13px 18px; }
+  .menu-backdrop { position: fixed; inset: 0; background: #000a; z-index: 60; }
+}
+@media (max-width:1399px) { .header-inner { gap: 16px; } .menu-toggle { margin-left: 0; } }
+@media (max-width:760px) {
+  .header-inner { gap: 10px; }
+  .header-account button { font-size: 11px; }
+  .header-login, .header-signup { min-height: 36px; padding: 8px 10px; }
+  .header-auth-actions { gap: 2px; }
+  .header-account-toggle { gap: 6px; padding-right: 9px; }
+  .header-account-panel { width: min(260px,calc(100vw - 60px)); }
+}
+@media (max-width:360px) {
+  .header-inner { gap: 8px; padding-inline: 16px; }
+  .header-login, .header-signup { padding-inline: 8px; }
+  .header-account-toggle .account-label { display: none; }
+}
+
+/* Login stays above the current page, with native focus containment and Escape. */
+.login-modal {
+  position: fixed; inset: 0; margin: auto; padding: 0; width: min(420px,calc(100vw - 40px));
+  max-height: calc(100dvh - 48px); overflow: auto; border: 1px solid #dce2d2; border-radius: 26px;
+  background: #fffefa; color: var(--ink); box-shadow: 0 24px 90px #24331b26;
+}
+.login-modal::backdrop { background: #222b2666; backdrop-filter: blur(5px); }
+.login-modal .agent-login { margin: 0; padding: 40px 32px 30px; max-width: none; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.login-modal .agent-login h2 { font-size: 23px; letter-spacing: -.045em; margin: 0 0 10px; padding-right: 18px; }
+.login-modal .agent-login p { font-size: 13px; line-height: 1.8; }
+.login-modal .agent-login form { margin-top: 26px; gap: 18px; }
+.login-modal .agent-login input { width: 100%; min-height: 44px; }
+.login-modal .agent-login form .primary { min-height: 44px; margin-top: 4px; }
+.login-modal .agent-login > .text-link { display: block; margin: 16px auto 0; font-size: 12px; }
+.login-modal-close { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: #7b8570; font-size: 24px; line-height: 1; }
+#agent-login-error:empty { display: none; }
+.login-prompt { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.login-prompt p { margin: 0; }
+.login-prompt button { flex-shrink: 0; }
+@media (hover:hover) and (pointer:fine) { .login-modal-close:hover { background: #edf1e5; color: #3d4d36; } }
+@media (max-width:760px) { .login-modal .agent-login { padding: 38px 24px 26px; } .login-prompt { flex-wrap: wrap; } }

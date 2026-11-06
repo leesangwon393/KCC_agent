@@ -6,7 +6,7 @@ const assert=require('node:assert/strict');
 (async()=>{
  const browser=await chromium.launch({headless:true,channel:process.env.PLAYWRIGHT_CHANNEL||"chrome"});
  try{
- const page=await browser.newPage(); const errors=[],commands=[];
+ const page=await browser.newPage({viewport:{width:1440,height:900}}); const errors=[],commands=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
  let authenticated=true,sessionCalls=0;
  const link={id:'mac-1',label:'My Mac',connected:true,commands:[],snapshot:{catalog:[{id:'p',name:'실제 프로젝트',desc:'프로젝트 설명'}],assets:[{id:'a',name:'실제파일.txt',project:'p',why:['실제 근거'],plan:{action:'file',target:'/project/실제파일.txt'},run:{status:'waiting_user',candidates:['p']}}],trashed:[{i:0,name:'설치파일.dmg'}]}};
