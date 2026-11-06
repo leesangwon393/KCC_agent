@@ -1,0 +1,22 @@
+name: Build Mac helper
+on:
+  push:
+    paths:
+      - '.github/workflows/build-mac-helper.yml'
+      - 'web/**'
+      - 'file-lifecycle-agent/prototype/**'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build universal helper
+        run: python3 web/local/build_helper.py --origin https://3.38.192.19
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moa-mac-helper
+          path: |
+            web/dist/downloads/moa-mac-helper.zip
+            web/dist/downloads/helper.json
+          if-no-files-found: error
