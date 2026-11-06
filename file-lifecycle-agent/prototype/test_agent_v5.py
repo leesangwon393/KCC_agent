@@ -196,7 +196,7 @@ class Docs(unittest.TestCase):
             with zipfile.ZipFile(f,'w') as z:
                 z.writestr('ppt/slides/slide2.xml','<p:sld><a:t>Demand Forecasting</a:t></p:sld>')
                 z.writestr('ppt/slides/slide1.xml','<p:sld><a:t>Operations Management</a:t><a:t>Lecture 6 &amp; HW</a:t></p:sld>')
-            self.assertEqual(content(f),'Operations Management Lecture 6 & HW\nDemand Forecasting')
+            self.assertEqual(content(f),'파일 이름: lec\nOperations Management Lecture 6 & HW\nDemand Forecasting')
             k=source_keys(['https://e/pluginfile.php/1/a.pdf','https://lms.example.edu/course/view.php?id=12345&section=2'])
             self.assertEqual(k,['lms.example.edu/course/view.php?id=12345'])
             r=Rules(Path(d)/'rules.json'); self.assertIsNone(r.match(k))

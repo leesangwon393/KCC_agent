@@ -37,7 +37,7 @@ def content(p):
     if p.suffix.lower() not in IMAGE|DOCS:return p.read_text(errors='replace')
     if p.suffix.lower() in DOCS:
         key=('doc',str(p),p.stat().st_mtime_ns)
-        if key not in _ocr_cache:_ocr_cache[key]=doc_text(p)
+        if key not in _ocr_cache:_ocr_cache[key]=caption(p,'파일 이름')+doc_text(p)  # '클라우드컴퓨팅-강의계획서.pdf': the name often names the course
         return _ocr_cache[key]
     key=(str(p),p.stat().st_mtime_ns)
     if key not in _ocr_cache:
@@ -49,10 +49,10 @@ def content(p):
     return _ocr_cache[key]
 # Names the camera or OS gave (IMG_1234, 스크린샷 2026-..., 2026-11-06 01.23.45, Copy-ending duplicates) carry no meaning.
 DEFAULT_NAME=re.compile(r'(?i)^(img|image|photo|screenshot|screen shot|스크린샷|화면 ?기록|screen recording)([\d\s._:-]|at|am|pm|오전|오후)*$|^[\d\s._:-]+$')
-def caption(p):
+def caption(p,label='캡션'):
     """A name the user typed (e.g. the iPhone shortcut's caption '생산운영관리 공지') is read as the first line of the image."""
     stem=re.sub(r'_\d{8}_\d{6}$','',Path(p).stem).strip()  # the watcher's collision suffix
-    return '' if DEFAULT_NAME.match(stem) or not re.search(r'[A-Za-z가-힣]',stem) else f'캡션: {stem}\n'
+    return '' if DEFAULT_NAME.match(stem) or not re.search(r'[A-Za-z가-힣]',stem) else f'{label}: {stem}\n'
 CHUNK=1200
 # Host guards, individually switchable for ablation. 'quote' is the original v5 grounding check.
 GUARDS=('quote','instruction','support','read_through','redact','fuzzy','stopwords','shared_weights','dense','rerank')
@@ -239,7 +239,11 @@ class ToolHostV5:
             out=[]
             for a in self.e.data['assets'].values():
                 if a['id']==self.aid or Path(a['path']).suffix.lower() not in TEXT:continue
-                lines=[l for l in self.e.path(a['path']).read_text(errors='replace').splitlines() if q in l.lower()]
+                f=self.e.path(a['path'])
+                if not f.is_file():continue  # the user deleted or moved a filed file: skip it, don't fail every new file
+                try:text=content(f) if f.suffix.lower() in DOCS else f.read_text(errors='replace')
+                except ToolError:continue
+                lines=[l for l in text.splitlines() if q in l.lower()]
                 if 'redact' in self.guards:lines=[l for l in lines if not INSTRUCTION.search(l)]
                 if lines:out.append({'path':a['path'],'project_id':a['project'],'project_status':self.e.data['projects'].get(a['project']),'matching_lines':lines[:3]})
             return {'files':out}
