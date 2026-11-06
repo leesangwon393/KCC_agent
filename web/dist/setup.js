@@ -3,8 +3,14 @@
  const panel=document.createElement('div');panel.className='note-block';panel.id='local-onboarding';
  document.querySelector('#connection .page-heading').after(panel);
  const request=async(path,body,extra={})=>{
-  const session=await fetch('/api/v1/auth/session/',{credentials:'same-origin'}).then(r=>r.json());
-  const r=await fetch('/api/v1/local/'+path,{method:body?'POST':'GET',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRFToken':session.csrf,...extra},body:body?JSON.stringify(body):undefined});
+  const headers={'Content-Type':'application/json',...extra};
+  if(body){
+   await window.MoaAuthReady;
+   const token=document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/)?.[1];
+   if(!token)throw new Error('로그인 보안 쿠키를 읽을 수 없습니다. 페이지를 새로고침해 주세요.');
+   headers['X-CSRFToken']=decodeURIComponent(token);
+  }
+  const r=await fetch('/api/v1/local/'+path,{method:body?'POST':'GET',credentials:'same-origin',headers,body:body?JSON.stringify(body):undefined});
   const data=await r.json();if(!r.ok)throw new Error(data.detail||'연결 실패');return data;
  };
  const key=location.hash.startsWith('#local-key=')?decodeURIComponent(location.hash.slice(11)):'';

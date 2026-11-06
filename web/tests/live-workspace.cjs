@@ -8,11 +8,11 @@ const assert=require('node:assert/strict');
  try{
  const page=await browser.newPage(); const errors=[],commands=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
- let authenticated=true;
+ let authenticated=true,sessionCalls=0;
  const link={id:'mac-1',label:'My Mac',connected:true,commands:[],snapshot:{catalog:[{id:'p',name:'실제 프로젝트',desc:'프로젝트 설명'}],assets:[{id:'a',name:'실제파일.txt',project:'p',why:['실제 근거'],plan:{action:'file',target:'/project/실제파일.txt'},run:{status:'waiting_user',candidates:['p']}}],trashed:[{i:0,name:'설치파일.dmg'}]}};
  await page.route('http://localhost/**',async route=>{
  const url=new URL(route.request().url());let body;
- if(url.pathname==='/api/v1/auth/session/')body={authenticated,csrf:'test',username:'tester'};
+ if(url.pathname==='/api/v1/auth/session/'){sessionCalls++;body={authenticated,csrf:'test',username:'tester'};}
  else if(url.pathname==='/api/v1/agent/status/')body={links:[link]};
  else if(url.pathname==='/api/v1/agent/commands/'){commands.push(route.request().postDataJSON());body={id:'command'};}
  else if(url.pathname==='/api/v1/auth/logout/'){authenticated=false;body={};}
@@ -23,6 +23,7 @@ const assert=require('node:assert/strict');
  });
  await page.goto('http://localhost/');
  await page.waitForFunction(()=>document.querySelector('#recent-files').textContent.includes('실제파일.txt'));
+ assert.equal(sessionCalls,1,'Initial page load should request one CSRF session');
  assert.equal(await page.locator('#stat-folders').textContent(),'1');
  await page.locator('.desktop-nav [data-page="files"]').click();
  await page.locator('#file-search').fill('없는파일');assert.equal(await page.locator('#all-files [data-asset]').count(),0);
