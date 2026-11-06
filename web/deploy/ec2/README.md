@@ -14,3 +14,9 @@ MOA_EC2_INSTANCE=... MOA_PUBLIC_HOST=... python deploy/ec2/update_ssm.py
 ```
 
 배포 전 해당 인스턴스에 SSM 권한과 nginx가 있어야 합니다. Django 개인 데이터 API는 로그인 세션이 필요하며, 실제 파일 수집·이동과 에이전트 실행은 아직 연결되지 않았습니다.
+
+## 운영 주소
+
+현재 무료 주소는 https://moa.3-38-192-19.sslip.io 입니다. sslip.io가 주소에 포함된 IP를 DNS로 반환하므로 서버 IP가 바뀌면 주소도 갱신해야 합니다. 기존 https://3.38.192.19 접속도 유지합니다.
+
+nginx의 `/etc/nginx/moa-ssl.conf`에 두 HTTPS 호스트를 등록했습니다. 새 주소의 Let's Encrypt 인증서는 `/etc/letsencrypt/live/moa.3-38-192-19.sslip.io/`에 있으며 `moa-certbot-renew.timer`가 갱신하고 nginx를 다시 읽습니다. `/etc/moa.env`의 `MOA_ALLOWED_HOSTS`, `MOA_CSRF_TRUSTED_ORIGINS`, `MOA_PUBLIC_ORIGIN`, `MOA_CLOUD_ORIGIN`도 새 주소를 사용합니다. 헬퍼 배포본은 새 운영 주소로 빌드해야 합니다.

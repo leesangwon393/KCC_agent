@@ -117,7 +117,7 @@ final class HelperApp: NSObject, NSApplicationDelegate {
     var createFolderRequested = false
     var ticket: String?
     var process: Process?
-    let origin = Bundle.main.object(forInfoDictionaryKey: "MoaOrigin") as? String ?? "https://3.38.192.19"
+    let origin = Bundle.main.object(forInfoDictionaryKey: "MoaOrigin") as? String ?? "https://moa.3-38-192-19.sslip.io"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let menu = NSMenu(); let item = NSMenuItem(); let submenu = NSMenu()

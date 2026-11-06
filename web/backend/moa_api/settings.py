@@ -94,8 +94,8 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 
 # Sign in with Apple. Keep the private key outside source and release bundles.
-MOA_PUBLIC_ORIGIN = os.environ.get('MOA_PUBLIC_ORIGIN', 'https://3.38.192.19').rstrip('/')
-MOA_CLOUD_ORIGIN = os.environ.get('MOA_CLOUD_ORIGIN', 'https://3.38.192.19').rstrip('/')
+MOA_PUBLIC_ORIGIN = os.environ.get('MOA_PUBLIC_ORIGIN', 'https://moa.3-38-192-19.sslip.io').rstrip('/')
+MOA_CLOUD_ORIGIN = os.environ.get('MOA_CLOUD_ORIGIN', 'https://moa.3-38-192-19.sslip.io').rstrip('/')
 APPLE_CLIENT_ID = os.environ.get('MOA_APPLE_CLIENT_ID', '')
 APPLE_TEAM_ID = os.environ.get('MOA_APPLE_TEAM_ID', '')
 APPLE_KEY_ID = os.environ.get('MOA_APPLE_KEY_ID', '')
