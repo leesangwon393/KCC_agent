@@ -59,20 +59,22 @@ def setup(request):
         try:
             base = root / '모아'
             inbox.mkdir(parents=True, exist_ok=True)
-            base.mkdir(parents=True, exist_ok=True)
+            projects_path = storage() / 'projects.json'
+            if not projects_path.exists():
+                base.mkdir(parents=True, exist_ok=True)
             projects = {}
-            for pid, name, desc, keywords in [
+            defaults = [
                 ('documents', '문서', '보고서, 기획서와 일반 문서를 보관합니다.', ['보고서', '기획서', '문서']),
                 ('receipts', '영수증', '결제 영수증과 구매 증빙을 보관합니다.', ['영수증', '결제', 'receipt']),
                 ('meetings', '회의', '회의록과 회의 자료를 보관합니다.', ['회의록', '회의', 'meeting']),
-            ]:
+            ]
+            for pid, name, desc, keywords in ([] if projects_path.exists() else defaults):
                 folder = base / name
                 folder.mkdir(exist_ok=True)
                 guide = folder / '_project.md'
                 if not guide.exists():
                     guide.write_text('# ' + name + '\n\n' + desc + '\n', encoding='utf-8')
                 projects[pid] = {'name': name, 'folder': str(folder), 'desc': desc, 'keywords': keywords}
-            projects_path = storage() / 'projects.json'
             if not projects_path.exists():
                 projects_path.write_text(json.dumps(projects, ensure_ascii=False), encoding='utf-8')
             tmp = config_path.with_suffix('.tmp')
@@ -144,6 +146,7 @@ def connect_cloud(request):
 def disconnect_cloud(request):
     from django.conf import settings
     from urllib.request import Request, urlopen
+    from urllib.error import HTTPError
     if not enabled(request):
         return JsonResponse({'detail': 'Local installation required'}, status=404)
     if not request.user.is_authenticated or request.user.get_username() != 'local-owner':
@@ -157,6 +160,9 @@ def disconnect_cloud(request):
             with urlopen(Request(saved['origin'] + '/api/v1/agent/pairing/disconnect/', data=b'{}',
                                  headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + saved['bridge_token']}), timeout=15):
                 pass
+        except HTTPError as error:
+            if error.code != 403:
+                return JsonResponse({'detail': 'AWS 연결을 해제하지 못했습니다.'}, status=502)
         except OSError:
             return JsonResponse({'detail': 'AWS 연결을 해제하지 못했습니다. 네트워크 확인 후 다시 시도하세요.'}, status=502)
         config.unlink()

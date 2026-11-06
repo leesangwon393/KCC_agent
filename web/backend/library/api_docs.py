@@ -122,6 +122,17 @@ def complete_schema(result, generator, request, public):
     add('/api/v1/local/cloud/disconnect/', 'post', '로컬 설정', '이 Mac의 AWS 연결 해제',
         '로컬 소유자 세션과 CSRF가 필요합니다. AWS 연결을 삭제한 후 Mac의 저장된 브리지 토큰을 지우고 AWS 동기화를 중지합니다. 로컬 파일 감시는 계속됩니다.',
         obj({'disconnected': BOOL}), errors=((403, '로컬 로그인 또는 CSRF 필요'), (404, '로컬 설치 아님'), (409, '운영 주소 불일치'), (502, 'AWS 연결 해제 실패')))
+    folder_state = obj({'status': STRING, 'completed': {'type': 'integer'}, 'total': {'type': 'integer'},
+                        'folder': STRING, 'detail': STRING})
+    add('/api/v1/local/folders/', 'get', '로컬 설정', '선택한 Mac 폴더의 지침 생성 진행 조회',
+        '로컬 설치와 local-owner 세션 전용입니다. QWEN 준비·모델 로딩·폴더별 생성·완료·실패 상태를 반환합니다. 운영 AWS에서는 사용할 수 없습니다.',
+        folder_state, errors=((403, '로컬 로그인 필요'), (404, '로컬 설치 아님')))
+    add('/api/v1/local/folders/', 'post', '로컬 설정', '선택한 Mac 폴더의 QWEN 지침 생성 시작',
+        'Mac 기본 선택창에서 받은 1~20개 폴더의 파일 이름을 Mac에서 분석해 _project.md를 작성합니다. 기존 지침은 보존합니다. 모든 지침이 준비된 뒤에만 분류 폴더 설정을 교체합니다. 본문 전송이나 파일 이동은 수행하지 않습니다.',
+        folder_state, obj({'folders': {'type': 'array', 'items': STRING, 'minItems': 1, 'maxItems': 20}}, ('folders',)),
+        ((400, '폴더 선택 오류'), (403, '로컬 로그인 또는 CSRF 필요'), (404, '로컬 설치 아님'), (409, '이미 생성 중'), (503, '작업 시작 실패')))
+    folder_responses = result['paths']['/api/v1/local/folders/']['post']['responses']
+    folder_responses['202'] = folder_responses.pop('200')
     add('/api/v1/auth/signup/', 'post', '기기 연결', '회원가입 후 자동 로그인',
         '아이디·닉네임·비밀번호로 일반 사용자 계정을 생성합니다. 아이디는 4~30자의 영문·숫자·밑줄·점·하이픈이며 소문자로 저장합니다. 닉네임은 선택 사항이며 최대 30자입니다. 비밀번호는 10~128자로 흔한 값·숫자만 사용한 값·사용자 정보와 비슷한 값은 거절합니다. Django 사용자 DB에 비밀번호 해시를 저장하고 가입 즉시 세션을 발급합니다. 세션 조회의 csrf를 X-CSRFToken으로 보내며, 가입 후 CSRF 토큰을 다시 조회합니다. Mac 연결과 파일 수집은 별도로 승인합니다.',
         obj({'authenticated': BOOL, 'username': STRING, 'display_name': STRING}),

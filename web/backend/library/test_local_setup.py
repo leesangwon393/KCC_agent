@@ -74,6 +74,15 @@ class LocalSetupTests(TestCase):
         self.assertEqual(self.client.post('/api/v1/local/setup/').status_code, 409)
         self.assertFalse((self.data / 'icloud.json').exists())
 
+    def test_selected_folders_replace_defaults_without_creating_unselected_projects(self):
+        self.client.force_login(self.user)
+        selected = {'selected': {'folder': '/Users/example/Selected', 'name': 'Selected'}}
+        (self.data / 'projects.json').write_text(json.dumps(selected))
+        response = self.client.post('/api/v1/local/setup/')
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse((self.cloud / '모아').exists())
+        self.assertEqual(json.loads((self.data / 'projects.json').read_text()), selected)
+
     def test_unlock_and_setup_enforce_csrf(self):
         client = Client(enforce_csrf_checks=True, HTTP_HOST='localhost', REMOTE_ADDR='127.0.0.1')
         self.assertEqual(client.post('/api/v1/local/unlock/', HTTP_X_MOA_LOCAL_KEY='local-secret').status_code, 403)
