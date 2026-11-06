@@ -1,6 +1,6 @@
 import hashlib
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 from .models import AgentLink, AgentCommand
 
@@ -62,3 +62,16 @@ class BrowserLoginTests(TestCase):
         self.assertEqual(client.post('/api/v1/auth/login/', data='{"username":"owner","password":"wrong"}', content_type='application/json', HTTP_X_CSRFTOKEN=token).status_code, 401)
         self.assertEqual(client.post('/api/v1/auth/login/', data='{"username":"owner","password":"strong-password-123"}', content_type='application/json', HTTP_X_CSRFTOKEN=token).status_code, 200)
         self.assertEqual(client.get('/api/v1/agent/status/').status_code, 200)
+
+    @override_settings(ALLOWED_HOSTS=['3.38.192.19'], SECURE_PROXY_SSL_HEADER=('HTTP_X_FORWARDED_PROTO', 'https'))
+    def test_login_accepts_https_origin_through_proxy(self):
+        from django.test import Client
+        get_user_model().objects.create_user('owner', password='strong-password-123')
+        client = Client(enforce_csrf_checks=True, HTTP_HOST='3.38.192.19', HTTP_X_FORWARDED_PROTO='https')
+        token = client.get('/api/v1/auth/session/').json()['csrf']
+        response = client.post('/api/v1/auth/login/',
+                               data='{"username":"owner","password":"strong-password-123"}',
+                               content_type='application/json', HTTP_X_CSRFTOKEN=token,
+                               HTTP_ORIGIN='https://3.38.192.19')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['authenticated'])
