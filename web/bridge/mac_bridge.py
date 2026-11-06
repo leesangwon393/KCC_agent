@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""Poll the Moa server from the Mac; execute queued commands in the local agent."""
+import argparse
+import json
+import os
+from pathlib import Path
+import sys
+import time
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+ACTIONS = {"answer", "approve", "keep", "undo", "restore_trashed"}
+
+
+def post(url, body, token=None):
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    request = Request(url, data=json.dumps(body, ensure_ascii=False).encode(), headers=headers, method="POST")
+    with urlopen(request, timeout=25) as response:
+        return json.load(response)
+
+
+def get(url):
+    with urlopen(url, timeout=25) as response:
+        return json.load(response)
+
+
+def write_pending(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(value, ensure_ascii=False))
+    os.chmod(temporary, 0o600)
+    temporary.replace(path)
+
+
+def public_state(raw):
+    """Send only the fields needed by the web UI and command validator."""
+    return {
+        "assets": [{"id": a.get("id"), "name": Path(a.get("original") or a.get("path") or "").name,
+                    "archived": bool(a.get("archived")), "keep": bool(a.get("keep")),
+                    "plan": a.get("plan"),
+                    "why": [str(x)[:500] for x in (a.get("why") or [])[:4]],
+                    "run": {k: (a.get("run") or {}).get(k) for k in ("status", "question", "candidates")}}
+                   for a in raw.get("assets", [])],
+        "catalog": [{k: p.get(k) for k in ("id", "name", "desc", "status")}
+                    for p in raw.get("catalog", [])],
+        "trashed": [{"i": t.get("i"), "name": Path(t.get("path") or t.get("trash") or "").name}
+                    for t in raw.get("trashed", [])],
+        "pending": raw.get("pending", 0),
+    }
+
+
+def run(server, local, token, interval, state_file):
+    if not server.startswith("https://"):
+        raise SystemExit("Server URL must use HTTPS")
+    if not local.startswith("http://127.0.0.1:"):
+        raise SystemExit("Local agent URL must use 127.0.0.1")
+    server, local = server.rstrip("/"), local.rstrip("/")
+    print("Moa bridge started; local files remain on this Mac", flush=True)
+    while True:
+        try:
+            if state_file.exists():
+                result = json.loads(state_file.read_text())
+                post(server + "/api/v1/agent/bridge/result/", result, token)
+                state_file.unlink()
+            snapshot = public_state(get(local + "/api/state"))
+            reply = post(server + "/api/v1/agent/bridge/poll/", {"snapshot": snapshot}, token)
+            command = reply.get("command")
+            if command:
+                action = command.get("action")
+                if action not in ACTIONS:
+                    result = {"ok": False, "error": "Unsupported action"}
+                else:
+                    try:
+                        result = post(local + "/api/" + action, command.get("payload") or {})
+                    except (HTTPError, URLError, ValueError) as exc:
+                        result = {"ok": False, "error": str(exc)}
+                report = {"id": command["id"], "ok": result.get("ok") is True,
+                          "result": result.get("result") if result.get("ok") is True else result.get("error", "Agent error")}
+                write_pending(state_file, report)
+                post(server + "/api/v1/agent/bridge/result/", report, token)
+                state_file.unlink()
+                print(f"Command {command['id']} {action}: {'done' if report['ok'] else 'failed'}", flush=True)
+        except (HTTPError, URLError, ValueError, OSError) as exc:
+            print(f"Bridge waiting: {exc}", file=sys.stderr, flush=True)
+        time.sleep(interval)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--server", required=True, help="Moa HTTPS site origin")
+    parser.add_argument("--local", default="http://127.0.0.1:8791", help="Mac agent origin")
+    parser.add_argument("--interval", type=int, default=5)
+    parser.add_argument("--state-file", type=Path, default=Path.home() / ".moa" / "bridge-result.json")
+    args = parser.parse_args()
+    token = os.environ.get("MOA_AGENT_TOKEN")
+    if not token:
+        raise SystemExit("Set MOA_AGENT_TOKEN in the Mac environment")
+    run(args.server, args.local, token, args.interval, args.state_file)

@@ -70,3 +70,31 @@ class ReviewRequest(OwnedModel):
 
     class Meta:
         ordering = ["-created_at"]
+
+class AgentLink(OwnedModel):
+    """A Mac bridge identity and its latest local-agent snapshot."""
+    label = models.CharField(max_length=120, default="Mac agent")
+    token_hash = models.CharField(max_length=64, unique=True)
+    snapshot = models.JSONField(default=dict)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class AgentCommand(OwnedModel):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        RUNNING = "running", "Running"
+        DONE = "done", "Done"
+        FAILED = "failed", "Failed"
+
+    link = models.ForeignKey(AgentLink, on_delete=models.CASCADE, related_name="commands")
+    action = models.CharField(max_length=24)
+    payload = models.JSONField(default=dict)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    result = models.JSONField(default=dict)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]

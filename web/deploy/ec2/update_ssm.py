@@ -93,8 +93,8 @@ if [ ! -f /etc/moa.env ]; then
   python3.11 -c 'import secrets; print("MOA_DJANGO_SECRET_KEY=" + secrets.token_urlsafe(64))' > /etc/moa.env
   chmod 600 /etc/moa.env
 fi
-sed -i '/^MOA_ALLOWED_HOSTS=/d; /^MOA_DB_PATH=/d' /etc/moa.env
-printf '%s\\n' 'MOA_ALLOWED_HOSTS={PUBLIC_HOST},127.0.0.1,localhost' 'MOA_DB_PATH=/var/lib/moa/db.sqlite3' >> /etc/moa.env
+sed -i '/^MOA_ALLOWED_HOSTS=/d; /^MOA_DB_PATH=/d; /^MOA_HTTPS=/d' /etc/moa.env
+printf '%s\\n' 'MOA_ALLOWED_HOSTS={PUBLIC_HOST},127.0.0.1,localhost' 'MOA_DB_PATH=/var/lib/moa/db.sqlite3' 'MOA_HTTPS=1' >> /etc/moa.env
 ln -sfnT "$release" /opt/moa/current
 set -a
 . /etc/moa.env
