@@ -19,4 +19,4 @@ MOA_DJANGO_SECRET_KEY=local-secret .venv/bin/python manage.py test library
 MOA_DJANGO_SECRET_KEY=local-secret .venv/bin/python manage.py runserver
 ```
 
-정적 화면은 `python3 -m http.server 8765 --directory web/dist`로 볼 수 있지만, 로그인과 실제 연결 화면은 `/api/` 프록시가 있는 배포 환경에서 동작합니다. API 문서는 `/swagger/`, 헬스 체크는 `/api/v1/health/`입니다. [`INTEGRATION.md`](INTEGRATION.md)에 연결 경계와 남은 작업을 정리했습니다.
+로컬에서 화면과 로그인·에이전트 연결을 함께 확인하려면 [`../LOCAL_SETUP.md`](../LOCAL_SETUP.md)를 따르세요. `MOA_DEBUG=1`일 때 Django가 `dist/`를 같은 주소에서 제공합니다. API 문서는 `/swagger/`, 헬스 체크는 `/api/v1/health/`입니다. [`INTEGRATION.md`](INTEGRATION.md)에 연결 경계와 남은 작업을 정리했습니다.

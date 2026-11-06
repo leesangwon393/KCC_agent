@@ -1,5 +1,5 @@
 import unittest
-from mac_bridge import public_state
+from mac_bridge import public_state, server_allowed
 
 
 class PrivacyTests(unittest.TestCase):
@@ -14,6 +14,17 @@ class PrivacyTests(unittest.TestCase):
         self.assertNotIn('/private', str(result))
         self.assertNotIn('private content', str(result))
         self.assertNotIn('body', str(result))
+
+
+class ServerUrlTests(unittest.TestCase):
+    def test_plain_http_requires_explicit_loopback_mode(self):
+        self.assertFalse(server_allowed('http://127.0.0.1:8000'))
+        self.assertTrue(server_allowed('http://127.0.0.1:8000', True))
+        self.assertTrue(server_allowed('http://localhost:8000', True))
+        self.assertFalse(server_allowed('http://127.0.0.1.evil.example:8000', True))
+        self.assertFalse(server_allowed('http://192.168.1.10:8000', True))
+        self.assertFalse(server_allowed('http://localhost:8000/path', True))
+        self.assertTrue(server_allowed('https://3.38.192.19'))
 
 
 if __name__ == '__main__':

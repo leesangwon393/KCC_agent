@@ -1,6 +1,8 @@
 # Mac 에이전트 연결
 
-Mac에서 로컬 에이전트와 이 브리지를 각각 실행합니다. 브리지는 Mac에서 HTTPS 사이트로만 접속하며, 에이전트의 로컬 API는 `127.0.0.1` 밖에 열지 않습니다. 브라우저에서 계정 로그인 후 상태와 승인 요청을 볼 수 있습니다.
+Mac에서 로컬 에이전트와 이 브리지를 각각 실행합니다. 브리지는 운영 사이트에 HTTPS로 접속하며, 에이전트의 로컬 API는 `127.0.0.1` 밖에 열지 않습니다. 브라우저에서 계정 로그인 후 상태와 승인 요청을 볼 수 있습니다.
+
+GitHub 클론부터 로컬 웹·API까지 실행하는 절차는 [`../../LOCAL_SETUP.md`](../../LOCAL_SETUP.md)를 참고하세요. 로컬 개발에서만 `--allow-insecure-localhost`로 `http://127.0.0.1` 연결을 허용할 수 있습니다.
 
 1. 서버에서 처음 연결하는 경우 `python backend/manage.py bootstrap_agent_owner <username>`으로 로그인 계정과 브리지 토큰을 함께 만듭니다. 기존 계정의 토큰을 교체하려면 `python backend/manage.py issue_agent_token <username>`을 사용합니다. 토큰 원문은 다시 조회할 수 없고, 재발급하면 이전 토큰은 무효가 됩니다.
 2. Mac에서 `python file-lifecycle-agent/prototype/demo_v5.py --root <작업폴더> --projects <projects.json> --watch --port 8791`을 실행합니다. 실제 감시 경로·모델·프로필 설정은 `file-lifecycle-agent/docs/local_api.md`를 따릅니다.

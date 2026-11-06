@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import time
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 ACTIONS = {"answer", "approve", "keep", "undo", "restore_trashed"}
@@ -51,9 +52,25 @@ def public_state(raw):
     }
 
 
-def run(server, local, token, interval, state_file):
-    if not server.startswith("https://"):
-        raise SystemExit("Server URL must use HTTPS")
+def server_allowed(server, allow_insecure_localhost=False):
+    parsed = urlsplit(server)
+    if parsed.scheme == "https":
+        return True
+    return (
+        allow_insecure_localhost
+        and parsed.scheme == "http"
+        and parsed.hostname in {"127.0.0.1", "localhost"}
+        and parsed.username is None
+        and parsed.password is None
+        and parsed.path in {"", "/"}
+        and not parsed.query
+        and not parsed.fragment
+    )
+
+
+def run(server, local, token, interval, state_file, allow_insecure_localhost=False):
+    if not server_allowed(server, allow_insecure_localhost):
+        raise SystemExit("Server URL must use HTTPS (or explicit local HTTP mode)")
     if not local.startswith("http://127.0.0.1:"):
         raise SystemExit("Local agent URL must use 127.0.0.1")
     server, local = server.rstrip("/"), local.rstrip("/")
@@ -93,8 +110,9 @@ if __name__ == "__main__":
     parser.add_argument("--local", default="http://127.0.0.1:8791", help="Mac agent origin")
     parser.add_argument("--interval", type=int, default=5)
     parser.add_argument("--state-file", type=Path, default=Path.home() / ".moa" / "bridge-result.json")
+    parser.add_argument("--allow-insecure-localhost", action="store_true", help="Allow HTTP only to localhost for local development")
     args = parser.parse_args()
     token = os.environ.get("MOA_AGENT_TOKEN")
     if not token:
         raise SystemExit("Set MOA_AGENT_TOKEN in the Mac environment")
-    run(args.server, args.local, token, args.interval, args.state_file)
+    run(args.server, args.local, token, args.interval, args.state_file, args.allow_insecure_localhost)

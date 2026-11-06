@@ -1,5 +1,9 @@
-from django.http import JsonResponse
-from django.urls import include, path
+from pathlib import Path
+
+from django.conf import settings
+from django.http import FileResponse, JsonResponse
+from django.urls import include, path, re_path
+from django.views.static import serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.permissions import AllowAny
 
@@ -24,3 +28,16 @@ urlpatterns = [
     path("api/schema/", SpectacularAPIView.as_view(permission_classes=[AllowAny]), name="schema"),
     path("swagger/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 ]
+
+
+if settings.DEBUG:
+    # Serve the checked-in web build from the same origin as the local API.
+    dist = Path(__file__).resolve().parents[2] / "dist"
+
+    def local_index(_request):
+        return FileResponse((dist / "index.html").open("rb"), content_type="text/html")
+
+    urlpatterns += [
+        path("", local_index),
+        re_path(r"^(?P<path>[^/]+)$", serve, {"document_root": dist}),
+    ]
