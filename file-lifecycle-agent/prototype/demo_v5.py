@@ -149,7 +149,21 @@ class Demo:
 
     def learn_source(self, a, pid):
         keys = source_keys(self.sources.get(a['original'], []))
-        return self.rules.learn(keys, pid) if self.rules and keys else {}
+        changed = self.rules.learn(keys, pid) if self.rules and keys else {}
+        if changed: self.runs.setdefault(a['id'], {}).setdefault('rule_learned', {}).update(changed); self.save_runs()  # undo forgets these
+        return changed
+
+    def learn_profile(self, e, a, pid):
+        """Append one note about the file to the project's _project.md (once per file)."""
+        r = self.runs.setdefault(a['id'], {}); folder = e.data.get('folders', {}).get(pid)
+        if not folder or r.get('learned'): return r.get('learned')
+        prof = Path(folder).expanduser() / '_project.md'
+        try: text = content(e.path(a['path'])) if Path(a['path']).suffix.lower() in TEXT | IMAGE else ''
+        except Exception: text = ''
+        note, trace = learn(None if self.ctl is rule_controller else self.ctl, prof, Path(a['original']).name, CAT[pid]['name'], text)
+        r['learned'] = {'note': note, 'trace': trace}
+        if note: CAT[pid]['profile'] = profile_text(prof)
+        self.save_runs(); return r['learned']
 
     def state(self):
         e = self.engine(); assets = []
@@ -196,15 +210,7 @@ class Demo:
         e = self.engine(); a = e.data['assets'][aid]
         a.update(project=pid, reason='user answer'); e.save()
         r = self.runs.setdefault(aid, {}); r['answered'] = pid; self.learn_source(a, pid)
-        folder = e.data.get('folders', {}).get(pid)
-        if folder:  # learn from the answer: the model appends a note to the project's _project.md
-            prof = Path(folder).expanduser() / '_project.md'
-            try: text = content(e.path(a['path'])) if Path(a['path']).suffix.lower() in TEXT | IMAGE else ''
-            except Exception: text = ''
-            note, trace = learn(None if self.ctl is rule_controller else self.ctl, prof, Path(a['original']).name, CAT[pid]['name'], text)
-            r['learned'] = {'note': note, 'trace': trace}
-            if note: CAT[pid]['profile'] = profile_text(prof)
-        self.save_runs(); return r.get('learned')
+        return self.learn_profile(e, a, pid)  # learn from the answer: a note in the project's _project.md
 
     def keep(self, aid):
         e = self.engine(); e.data['assets'][aid]['keep'] = True; e.save()
@@ -212,11 +218,16 @@ class Demo:
     def approve(self, aid, plan):
         # execute() re-plans and refuses if anything changed since the user saw the plan.
         out = self.engine().execute(aid, plan)
-        a = self.engine().data['assets'][aid]
-        if a['project']: self.learn_source(a, a['project'])  # approving a filing also teaches its download page
+        e = self.engine(); a = e.data['assets'][aid]
+        if a['project']:  # approving a filing teaches its download page and, unless a page rule decided it, the profile
+            self.learn_source(a, a['project'])
+            if (self.runs.get(aid) or {}).get('decider') != 'source': self.learn_profile(e, a, a['project'])
         return out
 
-    def undo(self, aid): self.engine().undo(aid)
+    def undo(self, aid):
+        self.engine().undo(aid)
+        learned = (self.runs.get(aid) or {}).pop('rule_learned', None)
+        if learned and self.rules: self.rules.forget(learned); self.save_runs()  # a wrong approval must not keep filing that page
 
     # Digest: ask once in a while where the unresolved files go; a plain-language reply becomes a confirmed proposal.
     digest = None; projects_path = None; new_root = Path.home() / 'Desktop'

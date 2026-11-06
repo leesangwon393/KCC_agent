@@ -41,6 +41,13 @@ class Rules:
         if changed: self.map.update(changed); self.path.write_text(json.dumps(self.map, ensure_ascii=False, indent=1))
         return changed
 
+    def forget(self, learned):
+        """Undo a learn(): drop the keys it set, if they still point where it set them."""
+        gone = [k for k, pid in learned.items() if self.map.get(k) == pid]
+        for k in gone: del self.map[k]
+        if gone: self.path.write_text(json.dumps(self.map, ensure_ascii=False, indent=1))
+        return gone
+
 
 if __name__ == '__main__':
     assert source_keys(['https://x/pluginfile.php/1/a.pdf', 'https://lms.example.edu/course/view.php?id=12345']) == ['lms.example.edu/course/view.php?id=12345']

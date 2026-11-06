@@ -132,6 +132,24 @@ class Learn(unittest.TestCase):
             note,_=learn(None,f,'hw.txt','KCC','\n과제 3: 수요예측 EOQ 계산\n')  # no-model fallback: first readable line
             self.assertEqual(note,'과제 3: 수요예측 EOQ 계산')
 
+    def test_approve_learns_profile_and_undo_forgets_rule(self):
+        import tempfile, demo_v5
+        from sources import Rules
+        base=Path(tempfile.mkdtemp());ws=base/'ws';proj=base/'POM';proj.mkdir();(ws/'downloads').mkdir(parents=True)
+        (proj/'_project.md').write_text('# POM\n')
+        (ws/'downloads'/'hw.txt').write_text('\n과제 3: 수요예측 EOQ 계산\n')
+        demo_v5.CAT['POM']={'name':'POM','desc':'x'}
+        d=demo_v5.Demo(ws,demo_v5.rule_controller,'rule');d.rules=Rules(base/'rules.json')
+        e=d.engine();e.data['projects']['POM']='active';e.data['folders']={'POM':str(proj)};e.save();aid=e.ingest('downloads/hw.txt')
+        d.sources['downloads/hw.txt']=['https://f/x.pdf','https://lms.example.edu/course/view.php?id=12345']
+        e=d.engine();e.data['assets'][aid]['project']='POM';e.save();d.runs[aid]={'decider':'rule'}
+        d.approve(aid,e.plan(aid))
+        self.assertIn('수요예측 EOQ',(proj/'_project.md').read_text())  # approval taught the profile
+        self.assertEqual(d.rules.match(['lms.example.edu/course/view.php?id=12345'])[1],'POM')
+        d.undo(aid);self.assertIsNone(d.rules.match(['lms.example.edu/course/view.php?id=12345']))  # undo forgot the page rule
+        self.assertIsNone(Rules(base/'rules.json').match(['lms.example.edu/course/view.php?id=12345']))
+        del demo_v5.CAT['POM']
+
 class Digest(unittest.TestCase):
     def test_reply_host_validates_and_builds_proposal(self):
         from digest import ReplyHost
