@@ -1,6 +1,6 @@
 # 모아 웹 · API
 
-`dist/`는 [운영 사이트](https://3.38.192.19/)의 정적 화면, `backend/`는 사용자별 데이터 API, `bridge/`는 Mac 에이전트와 Django API 사이의 HTTPS 중계 프로그램입니다. `deploy/ec2/`는 EC2 배포 절차입니다.
+`dist/`는 [운영 사이트](https://moa.3-38-192-19.sslip.io/)의 정적 화면, `backend/`는 사용자별 데이터 API, `bridge/`는 Mac 에이전트와 Django API 사이의 HTTPS 중계 프로그램입니다. `deploy/ec2/`는 EC2 배포 절차입니다.
 
 ## 실제 연결 범위
 

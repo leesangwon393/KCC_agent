@@ -17,7 +17,14 @@ def doc_text(p):
     import subprocess,zipfile,html
     s=p.suffix.lower()
     try:
-        if s=='.pdf':r=subprocess.run(['pdftotext','-l','8','-enc','UTF-8',str(p),'-'],capture_output=True,text=True,timeout=60)
+        if s=='.pdf':
+            from pypdf import PdfReader
+            from pypdf.errors import PdfReadError
+            try:
+                reader = PdfReader(p)
+                return '\n'.join(page.extract_text() or '' for page in reader.pages[:8])
+            except (PdfReadError, ValueError, KeyError) as error:
+                raise ToolError('PDF 읽기 실패: ' + str(error)[:200]) from error
         elif s=='.docx':r=subprocess.run(['textutil','-convert','txt','-stdout',str(p)],capture_output=True,text=True,timeout=60)
         elif s=='.pptx':
             with zipfile.ZipFile(p) as z:

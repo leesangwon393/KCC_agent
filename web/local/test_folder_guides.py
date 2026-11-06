@@ -72,3 +72,35 @@ class FolderGuidesTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             write_guides(self.folders, self.data, lambda _: '# Replace', lambda *_: None)
         self.assertEqual(target.read_text(), 'Keep')
+
+class AddFolderTests(unittest.TestCase):
+    setUp = FolderGuidesTests.setUp
+    def test_append_preserves_existing_metadata_and_generates_only_new_folder(self):
+        existing = {'legacy-key': {'name': 'My existing', 'folder': str(self.folders[0].resolve()), 'keywords': ['custom']}}
+        (self.data / 'projects.json').write_text(json.dumps(existing))
+        (self.folders[0] / '_project.md').write_text('Owner rules')
+        called = []
+        def generate(summary):
+            called.append(summary['folder'])
+            return '# New folder guide'
+        write_guides([f.resolve() for f in self.folders], self.data, generate, lambda *_: None, append=True)
+        result = json.loads((self.data / 'projects.json').read_text())
+        self.assertEqual(result['legacy-key'], existing['legacy-key'])
+        self.assertEqual(len(result), 2)
+        self.assertEqual(called, [self.folders[1].name])
+        self.assertEqual((self.folders[0] / '_project.md').read_text(), 'Owner rules')
+        write_guides([self.folders[1].resolve()], self.data, None, lambda *_: None, append=True)
+        self.assertEqual(json.loads((self.data / 'projects.json').read_text()), result)
+
+    def test_append_failure_and_nested_selection_preserve_current_projects(self):
+        existing = {'old': {'name': 'Keep', 'folder': str(self.folders[0].resolve())}}
+        original = json.dumps(existing)
+        (self.data / 'projects.json').write_text(original)
+        with self.assertRaises(RuntimeError):
+            write_guides([self.folders[1].resolve()], self.data,
+                         lambda _: (_ for _ in ()).throw(RuntimeError('model failed')), lambda *_: None, append=True)
+        self.assertEqual((self.data / 'projects.json').read_text(), original)
+        child = self.folders[0] / 'child'; child.mkdir()
+        with self.assertRaises(ValueError):
+            write_guides([child.resolve()], self.data, None, lambda *_: None, append=True)
+        self.assertEqual((self.data / 'projects.json').read_text(), original)
