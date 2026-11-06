@@ -48,7 +48,7 @@ def content(p):
         _ocr_cache[key]=caption(p)+'\n'.join(row['text'] for row in json.loads(r.stdout))
     return _ocr_cache[key]
 # Names the camera or OS gave (IMG_1234, 스크린샷 2026-..., 2026-11-06 01.23.45, Copy-ending duplicates) carry no meaning.
-DEFAULT_NAME=re.compile(r'(?i)^(img|image|photo|screenshot|screen shot|스크린샷|화면 ?기록|screen recording)([\d\s._:-]|at|am|pm|오전|오후)*$|^[\d\s._:-]+$')
+DEFAULT_NAME=re.compile(r'(?i)^(img|image|photo|shot|screenshot|screen shot|스크린샷|화면 ?기록|screen recording)([\d\s._:-]|at|am|pm|오전|오후)*$|^[\d\s._:-]+$')
 def caption(p,label='캡션'):
     """A name the user typed (e.g. the iPhone shortcut's caption '생산운영관리 공지') is read as the first line of the image."""
     stem=re.sub(r'_\d{8}_\d{6}$','',Path(p).stem).strip()  # the watcher's collision suffix
