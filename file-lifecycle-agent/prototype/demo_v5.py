@@ -106,7 +106,7 @@ class Watcher(threading.Thread):
         self.auto_inboxes = {Path(x).expanduser() for x in auto_inboxes}; self.strict_inboxes = {Path(x).expanduser() for x in strict_inboxes}
         self.auto = set(); self.strict = set()
         self.inboxes = list(dict.fromkeys([Path(x).expanduser() for x in inboxes] + sorted(self.auto_inboxes) + sorted(self.strict_inboxes)))
-        self.sizes = {}
+        self.sizes = {}; self.fetching = set()
         self.seen = {p for x in self.inboxes for p in x.glob('*')}  # only files that appear after start
 
     def candidates(self):
@@ -128,7 +128,8 @@ class Watcher(threading.Thread):
         except (ToolError, OSError) as exc: print('watcher: caption failed:', p.name, exc, flush=True); cap = None
         if cap:
             new = p.with_name(cap + p.suffix)
-            if new.exists(): new = new.with_stem(f'{new.stem}_{time.strftime("%Y%m%d_%H%M%S")}')
+            used = {a['original'] for a in self.d.engine().data['assets'].values()}  # an earlier capture may already be filed under this name
+            if new.exists() or str(new.relative_to(self.d.root)) in used: new = new.with_stem(f'{new.stem}_{time.strftime("%m%d_%H%M")}')
             p.rename(new); old = str(p.relative_to(self.d.root))
             for s in (self.auto, self.strict, self.ask):
                 if p in s: s.discard(p); s.add(new)
@@ -145,7 +146,12 @@ class Watcher(threading.Thread):
                 if copy_to.exists(): copy_to = copy_to.with_stem(f'{copy_to.stem}_{time.strftime("%Y%m%d_%H%M%S")}')  # iPhone names repeat
                 copy_to.parent.mkdir(exist_ok=True)
                 try: shutil.copy2(p, copy_to)
-                except OSError as exc: print('watcher: copy failed, retrying:', p.name, exc, flush=True); copy_to.unlink(missing_ok=True); continue  # iCloud file not downloaded yet
+                except OSError as exc:
+                    copy_to.unlink(missing_ok=True)
+                    if p not in self.fetching:  # iCloud keeps new files 'dataless' until something asks for them
+                        self.fetching.add(p); subprocess.run(['brctl', 'download', str(p)], capture_output=True, timeout=30)
+                        print('watcher: asked iCloud to download', p.name, exc, flush=True)
+                    continue
                 self.seen.add(p)
                 urls = where_froms(p)
                 if urls: self.d.sources[str(copy_to.relative_to(self.d.root))] = urls; self.d.save_sources()
