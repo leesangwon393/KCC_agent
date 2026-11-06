@@ -69,3 +69,25 @@ class FolderSetupTests(TestCase):
         projects = json.loads((self.data / 'projects.json').read_text())
         self.assertEqual(next(iter(projects.values()))['folder'], str(self.folder.resolve()))
         self.assertEqual((self.folder / '_project.md').read_text(), '# Existing owner guidance')
+
+    def test_add_mode_preserves_registered_folders_and_does_not_relink_account(self):
+        self.client.force_login(self.user)
+        old = self.data / 'old'; old.mkdir()
+        prior = {'keep-id': {'name': 'Old', 'folder': str(old.resolve()), 'keywords': ['saved']}}
+        (self.data / 'projects.json').write_text(json.dumps(prior))
+        (self.folder / '_project.md').write_text('# New folder rules')
+        (self.data / 'cloud.json').write_text('unchanged cloud credentials fixture')
+        response = self.client.post(self.path, {'folders': [str(self.folder)], 'mode': 'add'}, content_type='application/json')
+        self.assertEqual(response.status_code, 202)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            state = self.client.get(self.path).json()
+            if state['status'] in {'completed', 'failed'}:
+                break
+            time.sleep(.05)
+        self.assertEqual(state['status'], 'completed', state)
+        self.assertEqual(state['mode'], 'add')
+        projects = json.loads((self.data / 'projects.json').read_text())
+        self.assertEqual(projects['keep-id'], prior['keep-id'])
+        self.assertEqual(len(projects), 2)
+        self.assertEqual((self.data / 'cloud.json').read_text(), 'unchanged cloud credentials fixture')

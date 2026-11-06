@@ -42,18 +42,23 @@ def folders(request):
         try:
             body = json.loads(request.body)
             selected = guides.validate_folders(body.get('folders') if isinstance(body, dict) else None)
+            mode = body.get('mode', 'replace')
+            if mode not in {'replace', 'add'}:
+                raise ValueError('Invalid mode')
+            if mode == 'add':
+                guides.validate_additions(selected, data)
         except (ValueError, OSError, TypeError):
             return JsonResponse({'detail': '접근 가능한 폴더를 1~20개 선택하세요. 상위·하위 폴더는 중복 선택할 수 없습니다.'}, status=400)
         guides.atomic_json(data / 'selected-folders.json', [str(folder) for folder in selected])
-        status = {'status': 'preparing', 'completed': 0, 'total': len(selected)}
+        status = {'status': 'preparing', 'completed': 0, 'total': len(selected), 'mode': mode}
         guides.atomic_json(status_file, status)
         try:
             with (data / 'folder-setup.log').open('a') as log:
                 # The child retains the lock for its entire lifetime, including model setup.
-                subprocess.Popen([sys.executable, str(WORKER), '--data', str(data)],
+                subprocess.Popen([sys.executable, str(WORKER), '--data', str(data), *(['--append'] if mode == 'add' else [])],
                                  stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                                  pass_fds=(lock.fileno(),), start_new_session=True)
         except OSError:
-            guides.atomic_json(status_file, {'status': 'failed'})
+            guides.atomic_json(status_file, {'status': 'failed', 'mode': mode})
             return JsonResponse({'detail': 'QWEN 실행 프로그램을 시작하지 못했어요.'}, status=503)
     return JsonResponse(status, status=202)

@@ -38,6 +38,24 @@ def validate_folders(values):
     return folders
 
 
+def registered_projects(data):
+    path = data / 'projects.json'
+    projects = json.loads(path.read_text()) if path.exists() else {}
+    if not isinstance(projects, dict) or any(not isinstance(v, dict) or not isinstance(v.get('folder'), str) for v in projects.values()):
+        raise ValueError('기존 폴더 설정을 읽을 수 없습니다.')
+    return projects
+
+
+def validate_additions(folders, data):
+    existing = {Path(v['folder']).expanduser().resolve() for v in registered_projects(data).values()}
+    for folder in folders:
+        if folder in existing:
+            continue
+        if any(folder in other.parents or other in folder.parents for other in existing):
+            raise ValueError('기존 폴더와 상위·하위 폴더를 중복 추가할 수 없습니다.')
+    return existing
+
+
 def folder_summary(folder):
     # Only selected folders are inspected. No symlinks, recursion, or file uploads.
     entries = []
@@ -74,10 +92,13 @@ def generate_readme(model, tokenizer, summary):
     return text[:8000] + '\n'
 
 
-def write_guides(folders, data, generate, progress):
-    projects = {}
+def write_guides(folders, data, generate, progress, append=False):
+    projects = registered_projects(data) if append else {}
+    existing = validate_additions(folders, data) if append else set()
     for index, folder in enumerate(folders):
         progress(index, folder.name)
+        if folder in existing:
+            continue
         guide = folder / GUIDE
         # Existing guidance belongs to the user, including symlinks (never follow them).
         if guide.is_symlink():
@@ -126,11 +147,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', required=True, type=Path)
     parser.add_argument('--generate', action='store_true')
+    parser.add_argument('--append', action='store_true')
     args = parser.parse_args()
     os.umask(0o077)
     data = args.data
     status_path = data / 'folder-setup.json'
-    state = {'status': 'preparing', 'completed': 0, 'total': 0}
+    state = {'status': 'preparing', 'completed': 0, 'total': 0, 'mode': 'add' if args.append else 'replace'}
 
     def status(**changes):
         state.update(changes)
@@ -138,14 +160,16 @@ def main():
 
     try:
         folders = validate_folders(json.loads((data / 'selected-folders.json').read_text()))
+        existing = validate_additions(folders, data) if args.append else set()
+        pending = [folder for folder in folders if folder not in existing]
         status(total=len(folders))
         if not args.generate:
-            if all((folder / GUIDE).is_file() and not (folder / GUIDE).is_symlink() for folder in folders):
-                result = write_guides(folders, data, None, lambda index, name: status(completed=index, folder=name))
+            if all((folder / GUIDE).is_file() and not (folder / GUIDE).is_symlink() for folder in pending):
+                result = write_guides(folders, data, None, lambda index, name: status(completed=index, folder=name), append=args.append)
                 status(status='completed', completed=len(folders), folders=result)
                 return
             python = model_python(data)
-            result = subprocess.run([str(python), __file__, '--data', str(data), '--generate'])
+            result = subprocess.run([str(python), __file__, '--data', str(data), '--generate', *(['--append'] if args.append else [])])
             if result.returncode:
                 raise ValueError('QWEN 지침 생성에 실패했습니다. 연결 앱에서 다시 시도해 주세요.')
             return
@@ -157,7 +181,7 @@ def main():
         dtype = torch.float16 if device == 'mps' else torch.float32
         model = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=dtype, use_safetensors=True).to(device).eval()
         result = write_guides(folders, data, lambda summary: generate_readme(model, tokenizer, summary),
-                              lambda index, name: status(status='generating', completed=index, folder=name))
+                              lambda index, name: status(status='generating', completed=index, folder=name), append=args.append)
         status(status='completed', completed=len(folders), folders=result)
     except Exception:
         # Do not send local paths, file names, model traces, or credentials to the server.

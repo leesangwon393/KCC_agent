@@ -38,12 +38,11 @@ def main():
         credentials.write_text(result.stdout)
     token = json.loads(credentials.read_text())['bridge_token']
     children = []
-    logs = []
 
     def start(name, args, extra=None):
-        log = (DATA / (name + '.log')).open('a')
-        logs.append(log)
-        child = subprocess.Popen([sys.executable, *map(str, args)], env={**env, **(extra or {})}, stdout=log, stderr=log)
+        children[:] = [child for child in children if child.poll() is None]
+        with (DATA / (name + '.log')).open('a') as log:
+            child = subprocess.Popen([sys.executable, *map(str, args)], env={**env, **(extra or {})}, stdout=log, stderr=log)
         children.append(child)
         return child
 
@@ -56,8 +55,6 @@ def main():
                 child.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 child.kill()
-        for log in logs:
-            log.close()
 
     def signal_stop(*_):
         stop()
@@ -86,7 +83,8 @@ def main():
                 raise RuntimeError('Web server stopped')
             config = DATA / 'icloud.json'
             folder_status = DATA / 'folder-setup.json'
-            folders_ready = not folder_status.exists() or json.loads(folder_status.read_text()).get('status') == 'completed'
+            folder_state = json.loads(folder_status.read_text()) if folder_status.exists() else {}
+            folders_ready = not folder_state or folder_state.get('status') == 'completed' or folder_state.get('mode') == 'add'
             if not folders_ready:
                 for child in (agent, bridge, cloud_bridge):
                     if child is not None and child.poll() is None:
@@ -103,7 +101,9 @@ def main():
                 if agent is None or agent.poll() is not None:
                     agent = start('agent', [REPO / 'file-lifecycle-agent/prototype/demo_v5.py',
                         '--root', DATA / 'workspace', '--projects', DATA / 'projects.json',
-                        '--watch', '--scan-existing-inbox', '--auto-inbox', inbox, '--port', '8791'])
+                        '--watch', '--scan-existing-inbox', '--auto-inbox', inbox,
+                        '--strict-auto-inbox', Path.home() / 'Downloads',
+                        '--source-rules', DATA / 'source-rules.json', '--port', '8791'])
                     agent_inbox = inbox
                     agent_projects = projects_version
                 if bridge is None or bridge.poll() is not None:
