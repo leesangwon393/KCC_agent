@@ -1,3 +1,7 @@
+# 간편 시작: Mac 웹앱 + iCloud Drive
+
+최상위 **모아 시작.command**를 더블클릭 → 모아에서 **iCloud Drive 연결** → 이후 **Dock의 모아**로 실행. Python과 실행기 설정은 자동으로 진행합니다. [설치와 동작 범위](web/local/README.md)를 참고하세요.
+
 # Mac에서 로컬로 실행하기
 
 이 문서는 GitHub 저장소를 새로 클론한 Mac에서 웹·API·파일 에이전트·브리지를 함께 실행하는 절차입니다. Python 3.11 이상과 Git이 필요합니다. 처음에는 에이전트의 데모 작업 공간을 사용합니다.
@@ -53,4 +57,9 @@ MOA_AGENT_TOKEN="$(.venv/bin/python -c 'import json; print(json.load(open("web/l
 .venv/bin/python web/bridge/mac_bridge.py --server https://3.38.192.19
 ```
 
-운영 계정의 비밀번호와 토큰은 GitHub 저장소에 포함되지 않습니다. 실제 Mac 폴더를 감시하려면 [`file-lifecycle-agent/docs/local_api.md`](file-lifecycle-agent/docs/local_api.md)의 `--root`, `--projects`, `--watch` 설정을 적용하세요. 사이트의 **에이전트 연결** 화면만 실제 에이전트 데이터를 사용하며, 나머지 화면은 시연 데이터입니다.
+운영 계정의 비밀번호와 토큰은 GitHub 저장소에 포함되지 않습니다. 실제 Mac 폴더를 감시하려면 [`file-lifecycle-agent/docs/local_api.md`](file-lifecycle-agent/docs/local_api.md)의 `--root`, `--projects`, `--watch` 설정을 적용하세요. 실제 데이터 모드에서는 주요 운영 화면이 에이전트 데이터를 사용합니다.
+
+
+## 웹 실제 데이터 모드
+
+웹은 기본적으로 실제 데이터 모드로 열립니다. 연결 화면에서 로그인하면 대시보드·파일 검색·폴더·분류 대기·보관 대기·Mac 휴지통·명령 기록이 계정별 에이전트 상태를 사용합니다. 답변·이동 승인·유지·되돌리기·휴지통 복구는 기존 브리지 명령 API로 전달되며 5초마다 상태를 갱신합니다. 상단의 **시연 모드 보기**로 브라우저 예시 데이터를 별도로 사용할 수 있습니다. 실제 모드에서 폴더 설명은 읽기 전용이고 지침·감시·모델·정책 변경은 Mac에서 진행합니다. 브리지 업데이트 후 다시 실행해야 파일별 프로젝트 정보가 전송됩니다.

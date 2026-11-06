@@ -39,7 +39,7 @@ def public_state(raw):
     """Send only the fields needed by the web UI and command validator."""
     return {
         "assets": [{"id": a.get("id"), "name": Path(a.get("original") or a.get("path") or "").name,
-                    "archived": bool(a.get("archived")), "keep": bool(a.get("keep")),
+                    "project": a.get("project"), "archived": bool(a.get("archived")), "keep": bool(a.get("keep")),
                     "plan": a.get("plan"),
                     "why": [str(x)[:500] for x in (a.get("why") or [])[:4]],
                     "run": {k: (a.get("run") or {}).get(k) for k in ("status", "question", "candidates")}}

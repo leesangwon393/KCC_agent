@@ -98,7 +98,7 @@ def notify(title, text):
 class Watcher(threading.Thread):
     """Trigger: a new file in a watched folder is ingested and analyzed, then the user is notified.
     --inbox folders (e.g. ~/Desktop for screenshots) are copied in, never moved: user originals stay untouched."""
-    def __init__(self, demo, inboxes, interval=2.0, auto_inboxes=(), strict_inboxes=(), ask_inboxes=()):
+    def __init__(self, demo, inboxes, interval=2.0, auto_inboxes=(), strict_inboxes=(), ask_inboxes=(), scan_existing=False):
         super().__init__(daemon=True); self.d = demo; self.interval = interval
         self.ask_inboxes = {Path(x).expanduser() for x in ask_inboxes}; self.ask = set()  # not auto-filed -> ask in a dialog
         # auto: any confident 'file' plan runs without a click (iPhone captures). strict: only download-source rules and the
@@ -107,7 +107,28 @@ class Watcher(threading.Thread):
         self.auto = set(); self.strict = set()
         self.inboxes = list(dict.fromkeys([Path(x).expanduser() for x in inboxes] + sorted(self.auto_inboxes) + sorted(self.strict_inboxes)))
         self.sizes = {}; self.fetching = set()
-        self.seen = {p for x in self.inboxes for p in x.glob('*')}  # only files that appear after start
+        self.inbox_log = self.d.root / 'inbox-seen.json' if scan_existing else None
+        try: self.inbox_seen = json.loads(self.inbox_log.read_text()) if self.inbox_log and self.inbox_log.exists() else {}
+        except (ValueError, OSError): self.inbox_seen = {}
+        self.seen = set()
+        for x in self.inboxes:
+            for p in x.glob('*'):
+                try:
+                    if not scan_existing or self.inbox_seen.get(str(p)) == self.signature(p): self.seen.add(p)
+                except OSError: pass
+
+    @staticmethod
+    def signature(path):
+        st = path.stat()
+        return [st.st_size, st.st_mtime_ns]
+
+    def remember(self, path):
+        self.seen.add(path)
+        if self.inbox_log:
+            self.inbox_seen[str(path)] = self.signature(path)
+            tmp = self.inbox_log.with_suffix('.tmp')
+            tmp.write_text(json.dumps(self.inbox_seen, ensure_ascii=False))
+            tmp.replace(self.inbox_log)
 
     def candidates(self):
         for x in self.inboxes:
@@ -152,7 +173,7 @@ class Watcher(threading.Thread):
                         self.fetching.add(p); subprocess.run(['brctl', 'download', str(p)], capture_output=True, timeout=30)
                         print('watcher: asked iCloud to download', p.name, exc, flush=True)
                     continue
-                self.seen.add(p)
+                self.remember(p)
                 urls = where_froms(p)
                 if urls: self.d.sources[str(copy_to.relative_to(self.d.root))] = urls; self.d.save_sources()
                 if p.parent in self.auto_inboxes: self.auto.add(copy_to)
@@ -461,6 +482,7 @@ if __name__ == '__main__':
     ap.add_argument('--qwen', help='HF model dir; omit to use the rule controller')
     ap.add_argument('--adapter', help='LoRA adapter dir for --qwen')
     ap.add_argument('--watch', action='store_true', help='trigger: analyze new files in <root>/downloads and <root>/screenshots')
+    ap.add_argument('--scan-existing-inbox', action='store_true', help='include existing inbox files and persist imported signatures across restarts')
     ap.add_argument('--inbox', action='append', default=[], help='with --watch: copy new files from this folder in (e.g. ~/Desktop for screenshots)')
     ap.add_argument('--digest-hours', type=float, default=0, help='ask about unresolved files every N hours while the user is at the Mac (0 = off; the page also has an "ask now" button)')
     ap.add_argument('--auto-inbox', action='append', default=[], help='like --inbox, but a confident "save to project folder" plan is executed without a click (e.g. the iCloud KCC-inbox for iPhone captures); questions still wait')
@@ -486,7 +508,7 @@ if __name__ == '__main__':
         ctl, name = rule_controller, '규칙 controller (GPU 없이 실행)'
     demo = Demo(a.root, ctl, name); demo.watching = a.watch
     if a.source_rules: demo.rules = Rules(a.source_rules)
-    if a.watch: Watcher(demo, a.inbox, auto_inboxes=a.auto_inbox, strict_inboxes=a.strict_auto_inbox, ask_inboxes=a.ask_inbox).start()
+    if a.watch: Watcher(demo, a.inbox, auto_inboxes=a.auto_inbox, strict_inboxes=a.strict_auto_inbox, ask_inboxes=a.ask_inbox, scan_existing=a.scan_existing_inbox).start()
     if a.projects: demo.projects_path = Path(a.projects)
     if a.expire_installers_days:
         demo.expiry = Expiry(Path(a.root) / 'expiry.json', a.inbox + a.strict_auto_inbox, a.expire_installers_days)

@@ -8,7 +8,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.permissions import AllowAny
 
 from library.urls import router
-from library import agent_api
+from library import agent_api, local_setup
 
 
 def health(_request):
@@ -16,6 +16,8 @@ def health(_request):
 
 
 urlpatterns = [
+    path("api/v1/local/unlock/", local_setup.unlock),
+    path("api/v1/local/setup/", local_setup.setup),
     path("api/v1/health/", health, name="health"),
     path("api/v1/auth/session/", agent_api.session),
     path("api/v1/auth/login/", agent_api.sign_in),
