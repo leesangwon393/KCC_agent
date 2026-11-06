@@ -70,5 +70,82 @@ def setup(request):
             tmp.replace(config_path)
         except OSError:
             return JsonResponse({'detail': 'iCloud Drive 폴더에 접근할 수 없습니다. Mac의 파일 접근 권한을 확인해 주세요.'}, status=409)
-    return JsonResponse({'available': root.is_dir(), 'configured': config_path.exists(),
+    cloud_path = storage() / 'cloud.json'
+    cloud_origin = json.loads(cloud_path.read_text()).get('origin') if cloud_path.exists() else None
+    return JsonResponse({'available': root.is_dir(), 'configured': config_path.exists(), 'cloud_origin': cloud_origin,
                          'folder': 'iCloud Drive / 모아 / 받은 파일'})
+
+
+@require_POST
+@csrf_protect
+def connect_cloud(request):
+    """Receive a ticket after an explicit same-origin confirmation on this Mac."""
+    from django.conf import settings
+    from urllib.error import HTTPError, URLError
+    from urllib.parse import urlsplit
+    from urllib.request import Request, urlopen
+
+    if not enabled(request):
+        return JsonResponse({'detail': 'Local installation required'}, status=404)
+    try:
+        body = json.loads(request.body)
+    except (ValueError, UnicodeDecodeError):
+        return JsonResponse({'detail': '잘못된 연결 요청입니다.'}, status=400)
+    if not isinstance(body, dict):
+        return JsonResponse({'detail': '잘못된 연결 요청입니다.'}, status=400)
+    origin, secret = body.get('origin'), body.get('pairing_secret')
+    trusted = settings.MOA_CLOUD_ORIGIN
+    parsed = urlsplit(trusted)
+    if (origin != trusted or parsed.scheme != 'https' or not parsed.hostname
+            or parsed.path not in ('', '/') or parsed.query or parsed.fragment
+            or parsed.username or parsed.password):
+        return JsonResponse({'detail': '등록된 모아 AWS 주소만 연결할 수 있습니다.'}, status=400)
+    if not isinstance(secret, str) or not 32 <= len(secret) <= 128:
+        return JsonResponse({'detail': '잘못된 연결 코드입니다.'}, status=400)
+    config = storage() / 'cloud.json'
+    if config.exists():
+        return JsonResponse({'detail': '이 Mac은 이미 AWS에 연결되어 있습니다. 기존 연결을 해제한 뒤 다시 연결하세요.'}, status=409)
+    try:
+        payload = json.dumps({'pairing_secret': secret}).encode()
+        with urlopen(Request(trusted + '/api/v1/agent/pairing/consume/', data=payload,
+                             headers={'Content-Type': 'application/json'}), timeout=15) as response:
+            token = json.load(response)['bridge_token']
+        if not isinstance(token, str) or not 32 <= len(token) <= 128:
+            raise ValueError('Invalid token')
+        # Exclusive create prevents a competing connection from overwriting a token.
+        fd = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, 'w') as output:
+            json.dump({'origin': trusted, 'bridge_token': token}, output)
+    except FileExistsError:
+        return JsonResponse({'detail': '이미 연결되었습니다.'}, status=409)
+    except HTTPError:
+        return JsonResponse({'detail': '연결 코드가 만료되었거나 거절되었습니다. AWS에서 다시 연결하세요.'}, status=400)
+    except (URLError, OSError, ValueError, KeyError):
+        return JsonResponse({'detail': 'AWS 연결에 실패했습니다. 네트워크와 HTTPS 인증서를 확인하세요.'}, status=502)
+    user = get_user_model().objects.get(username='local-owner')
+    login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+    return JsonResponse({'connected': True, 'origin': trusted})
+
+
+@require_POST
+@csrf_protect
+def disconnect_cloud(request):
+    from django.conf import settings
+    from urllib.request import Request, urlopen
+    if not enabled(request):
+        return JsonResponse({'detail': 'Local installation required'}, status=404)
+    if not request.user.is_authenticated or request.user.get_username() != 'local-owner':
+        return JsonResponse({'detail': '로컬 모아에서 연결을 해제하세요.'}, status=403)
+    config = storage() / 'cloud.json'
+    if config.exists():
+        saved = json.loads(config.read_text())
+        if saved['origin'] != settings.MOA_CLOUD_ORIGIN:
+            return JsonResponse({'detail': '운영 주소 설정을 확인하세요.'}, status=409)
+        try:
+            with urlopen(Request(saved['origin'] + '/api/v1/agent/pairing/disconnect/', data=b'{}',
+                                 headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + saved['bridge_token']}), timeout=15):
+                pass
+        except OSError:
+            return JsonResponse({'detail': 'AWS 연결을 해제하지 못했습니다. 네트워크 확인 후 다시 시도하세요.'}, status=502)
+        config.unlink()
+    return JsonResponse({'disconnected': True})

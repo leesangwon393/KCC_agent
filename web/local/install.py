@@ -1,4 +1,5 @@
 """Register the user's local helper and open first-run setup in Safari."""
+import argparse
 import os
 from pathlib import Path
 import plistlib
@@ -16,6 +17,9 @@ LABEL = 'com.moa.local'
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--helper-only', action='store_true', help='Install the Mac helper without replacing the Safari Dock app')
+    args = parser.parse_args()
     DATA.mkdir(parents=True, exist_ok=True, mode=0o700)
     agents = Path.home() / 'Library/LaunchAgents'
     agents.mkdir(exist_ok=True)
@@ -23,6 +27,7 @@ def main():
     expected = {'Label': LABEL, 'ProgramArguments': [sys.executable, str(REPO / 'web/local/run.py')],
                 'RunAtLoad': True, 'KeepAlive': True, 'ThrottleInterval': 10,
                 'WorkingDirectory': str(REPO),
+                'EnvironmentVariables': {'MOA_CLOUD_ORIGIN': os.environ.get('MOA_CLOUD_ORIGIN', 'https://3.38.192.19').rstrip('/')},
                 'StandardOutPath': str(DATA / 'service.log'),
                 'StandardErrorPath': str(DATA / 'service.log')}
     existing = plistlib.loads(plist.read_bytes()) if plist.exists() else None
@@ -43,6 +48,9 @@ def main():
         time.sleep(.5)
     else:
         raise SystemExit(f'모아 실행 실패. 로그를 확인하세요: {DATA / "service.log"}')
+    if args.helper_only:
+        print('Mac 연결 프로그램이 준비되었습니다. AWS 모아에서 이 Mac 연결하기를 눌러 주세요.')
+        return
     url = 'http://127.0.0.1:8000/#local-key=' + quote((DATA / 'local-key').read_text().strip())
     source = REPO / 'web/local/Moa.swift'
     developer_tools = subprocess.run(['xcode-select', '-p'], capture_output=True).returncode == 0

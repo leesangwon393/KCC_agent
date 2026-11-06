@@ -98,3 +98,31 @@ class AgentCommand(OwnedModel):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class AppleIdentity(models.Model):
+    """Apple subject, never an email address, is the account identifier."""
+    subject = models.CharField(max_length=255, unique=True)
+    owner = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+
+class AppleLoginAttempt(models.Model):
+    state_hash = models.CharField(max_length=64, unique=True)
+    browser_hash = models.CharField(max_length=64)
+    nonce = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True)
+
+
+class MacPairing(OwnedModel):
+    secret_hash = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True)
+
+
+class OnboardingProgress(models.Model):
+    owner = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    iphone_icloud_confirmed = models.BooleanField(default=False)
+    test_started_at = models.DateTimeField(null=True)
+    baseline_assets = models.JSONField(default=list)
+    completed_at = models.DateTimeField(null=True)
