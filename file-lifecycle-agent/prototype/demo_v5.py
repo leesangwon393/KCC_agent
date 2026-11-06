@@ -59,6 +59,36 @@ PARTIAL = {'.crdownload', '.download', '.part', '.tmp'}
 WATCH_DIRS = ['downloads', 'screenshots']  # inside the demo root; the executor never leaves the root
 
 
+ASK = '''on run argv
+  set opts to items 3 thru -1 of argv
+  set r to choose from list opts with title "KCC 에이전트" with prompt (item 1 of argv) default items {item 2 of argv}
+  if r is false then return ""
+  return item 1 of r
+end run'''
+LEAVE = '여기 그대로 두기'
+
+
+def ask_folder(demo, aid, name, guess):
+    """First time for this download page: ask in a macOS dialog; the answer files it and teaches the page rule,
+    so the next file from the same page is filed without asking. Runs in its own thread (the dialog waits for the user)."""
+    names = {CAT[k]['name']: k for k in CAT}; opts = [*names, LEAVE]
+    default = CAT[guess]['name'] if guess in CAT else opts[0]
+    try: r = subprocess.run(['osascript', '-e', ASK, f'{name}\n어느 폴더에 저장할까요? (다음부터는 묻지 않고 저장합니다)', default, *opts],
+                            capture_output=True, text=True, timeout=3600)
+    except subprocess.TimeoutExpired: return
+    pick = r.stdout.strip()
+    if not pick: return  # cancelled: the file waits on the page
+    with demo.lock:
+        try:
+            if pick == LEAVE: demo.keep(aid); text = '그대로 두기'
+            else:
+                pid = names[pick]; demo.answer(aid, pid); plan = demo.engine().plan(aid)
+                if plan['action'] == 'file': demo.approve(aid, plan)
+                text = f'{pick} 폴더에 저장 (이 페이지는 다음부터 자동)'
+        except Exception as exc: text = f'저장 실패: {exc}'
+        demo.events.append({'path': name, 'text': text}); demo.events = demo.events[-20:]; demo.version += 1
+
+
 def notify(title, text):
     # argv, not string interpolation: file names are untrusted.
     subprocess.run(['osascript', '-e', 'on run argv', '-e', 'display notification (item 2 of argv) with title (item 1 of argv)',
@@ -68,8 +98,9 @@ def notify(title, text):
 class Watcher(threading.Thread):
     """Trigger: a new file in a watched folder is ingested and analyzed, then the user is notified.
     --inbox folders (e.g. ~/Desktop for screenshots) are copied in, never moved: user originals stay untouched."""
-    def __init__(self, demo, inboxes, interval=2.0, auto_inboxes=(), strict_inboxes=()):
+    def __init__(self, demo, inboxes, interval=2.0, auto_inboxes=(), strict_inboxes=(), ask_inboxes=()):
         super().__init__(daemon=True); self.d = demo; self.interval = interval
+        self.ask_inboxes = {Path(x).expanduser() for x in ask_inboxes}; self.ask = set()  # not auto-filed -> ask in a dialog
         # auto: any confident 'file' plan runs without a click (iPhone captures). strict: only download-source rules and the
         # rule controller, and only documents/screenshots (Downloads, Desktop: personal notes and mixed files live there).
         self.auto_inboxes = {Path(x).expanduser() for x in auto_inboxes}; self.strict_inboxes = {Path(x).expanduser() for x in strict_inboxes}
@@ -101,12 +132,13 @@ class Watcher(threading.Thread):
                 if copy_to.exists(): copy_to = copy_to.with_stem(f'{copy_to.stem}_{time.strftime("%Y%m%d_%H%M%S")}')  # iPhone names repeat
                 copy_to.parent.mkdir(exist_ok=True)
                 try: shutil.copy2(p, copy_to)
-                except OSError: copy_to.unlink(missing_ok=True); continue  # iCloud file not downloaded yet: retry next tick
+                except OSError as exc: print('watcher: copy failed, retrying:', p.name, exc, flush=True); copy_to.unlink(missing_ok=True); continue  # iCloud file not downloaded yet
                 self.seen.add(p)
                 urls = where_froms(p)
                 if urls: self.d.sources[str(copy_to.relative_to(self.d.root))] = urls; self.d.save_sources()
                 if p.parent in self.auto_inboxes: self.auto.add(copy_to)
                 if p.parent in self.strict_inboxes: self.strict.add(copy_to)
+                if p.parent in self.ask_inboxes and p.suffix.lower() in DOCS: self.ask.add(copy_to)
                 continue  # analyzed on the next tick
             rel = str(p.relative_to(self.d.root))
             if rel in known: continue
@@ -123,7 +155,10 @@ class Watcher(threading.Thread):
                     try: self.d.engine().execute(aid, plan); text = f'{CAT[a["project"]]["name"]} 폴더에 자동 저장 (되돌리기 가능)'
                     except Exception as exc: text += f' · 자동 저장 실패: {exc}'
                 self.d.events.append({'path': rel, 'text': text}); self.d.events = self.d.events[-20:]; self.d.version += 1
-            notify(f'새 파일: {p.name}', text)
+                filed = self.d.engine().data['assets'][aid]['path'] != rel
+            if p in self.ask and not filed:
+                threading.Thread(target=ask_folder, args=(self.d, aid, p.name, r.get('project') or (r.get('candidates') or [None])[0]), daemon=True).start()
+            else: notify(f'새 파일: {p.name}', text)
 
     def run(self):
         for sub in WATCH_DIRS: (self.d.root / sub).mkdir(exist_ok=True)
@@ -413,6 +448,7 @@ if __name__ == '__main__':
     ap.add_argument('--projects', help="real projects JSON {pid: {name, folder, desc, keywords}} (see build_profiles.py); approved files are filed into each project's folder")
     ap.add_argument('--expire-installers-days', type=float, default=0, help='move .dmg/.pkg installers in the inboxes to the Trash N days after first seen, by the Mac clock (0 = off)')
     ap.add_argument('--allow-origin', action='append', default=[], help='web page origin allowed to call the API from a browser, e.g. http://localhost:3000 (repeatable; default: only this page)')
+    ap.add_argument('--ask-inbox', action='append', default=[], help='documents from this folder that were not filed automatically are asked about in a macOS dialog (e.g. ~/Downloads)')
     a = ap.parse_args()
     if a.projects:
         P = json.loads(Path(a.projects).read_text())
@@ -429,7 +465,7 @@ if __name__ == '__main__':
         ctl, name = rule_controller, '규칙 controller (GPU 없이 실행)'
     demo = Demo(a.root, ctl, name); demo.watching = a.watch
     if a.source_rules: demo.rules = Rules(a.source_rules)
-    if a.watch: Watcher(demo, a.inbox, auto_inboxes=a.auto_inbox, strict_inboxes=a.strict_auto_inbox).start()
+    if a.watch: Watcher(demo, a.inbox, auto_inboxes=a.auto_inbox, strict_inboxes=a.strict_auto_inbox, ask_inboxes=a.ask_inbox).start()
     if a.projects: demo.projects_path = Path(a.projects)
     if a.expire_installers_days:
         demo.expiry = Expiry(Path(a.root) / 'expiry.json', a.inbox + a.strict_auto_inbox, a.expire_installers_days)
