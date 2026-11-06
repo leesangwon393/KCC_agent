@@ -8,10 +8,10 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import argparse, json, random, shutil, subprocess, threading, time
 from lifecycle_v3 import Lifecycle
-from agent_v5 import ToolHostV5, run, run_hybrid, rule_controller, DEFAULT_GUARDS, content, caption, TEXT, IMAGE, WEIGHTS, CHUNK, DOCS, ToolError
+from agent_v5 import ToolHostV5, run, run_hybrid, rule_controller, DEFAULT_GUARDS, content, caption, TEXT, IMAGE, WEIGHTS, CHUNK, DOCS, ToolError, semantic_doc, dense_scores
 from sources import where_froms, source_keys, Rules
 from profile_learn import learn, profile_text, rule_note, make_caption
-from digest import parse_reply, guide, user_active
+from digest import parse_reply, guide, user_active, propose_folders, MIN_FILES
 from expiry import Expiry
 from tasks_v5 import CATALOG, SHARED, FILLER, INJECT, NOISE_TEXT
 
@@ -98,7 +98,7 @@ def notify(title, text):
 class Watcher(threading.Thread):
     """Trigger: a new file in a watched folder is ingested and analyzed, then the user is notified.
     --inbox folders (e.g. ~/Desktop for screenshots) are copied in, never moved: user originals stay untouched."""
-    def __init__(self, demo, inboxes, interval=2.0, auto_inboxes=(), strict_inboxes=(), ask_inboxes=(), scan_existing=False):
+    def __init__(self, demo, inboxes, interval=2.0, auto_inboxes=(), strict_inboxes=(), ask_inboxes=()):
         super().__init__(daemon=True); self.d = demo; self.interval = interval
         self.ask_inboxes = {Path(x).expanduser() for x in ask_inboxes}; self.ask = set()  # not auto-filed -> ask in a dialog
         # auto: any confident 'file' plan runs without a click (iPhone captures). strict: only download-source rules and the
@@ -107,28 +107,7 @@ class Watcher(threading.Thread):
         self.auto = set(); self.strict = set()
         self.inboxes = list(dict.fromkeys([Path(x).expanduser() for x in inboxes] + sorted(self.auto_inboxes) + sorted(self.strict_inboxes)))
         self.sizes = {}; self.fetching = set()
-        self.inbox_log = self.d.root / 'inbox-seen.json' if scan_existing else None
-        try: self.inbox_seen = json.loads(self.inbox_log.read_text()) if self.inbox_log and self.inbox_log.exists() else {}
-        except (ValueError, OSError): self.inbox_seen = {}
-        self.seen = set()
-        for x in self.inboxes:
-            for p in x.glob('*'):
-                try:
-                    if not scan_existing or self.inbox_seen.get(str(p)) == self.signature(p): self.seen.add(p)
-                except OSError: pass
-
-    @staticmethod
-    def signature(path):
-        st = path.stat()
-        return [st.st_size, st.st_mtime_ns]
-
-    def remember(self, path):
-        self.seen.add(path)
-        if self.inbox_log:
-            self.inbox_seen[str(path)] = self.signature(path)
-            tmp = self.inbox_log.with_suffix('.tmp')
-            tmp.write_text(json.dumps(self.inbox_seen, ensure_ascii=False))
-            tmp.replace(self.inbox_log)
+        self.seen = {p for x in self.inboxes for p in x.glob('*')}  # only files that appear after start
 
     def candidates(self):
         for x in self.inboxes:
@@ -173,7 +152,7 @@ class Watcher(threading.Thread):
                         self.fetching.add(p); subprocess.run(['brctl', 'download', str(p)], capture_output=True, timeout=30)
                         print('watcher: asked iCloud to download', p.name, exc, flush=True)
                     continue
-                self.remember(p)
+                self.seen.add(p)
                 urls = where_froms(p)
                 if urls: self.d.sources[str(copy_to.relative_to(self.d.root))] = urls; self.d.save_sources()
                 if p.parent in self.auto_inboxes: self.auto.add(copy_to)
@@ -326,15 +305,23 @@ class Demo:
                 and a['path'] == a['original'] and (self.runs.get(a['id']) or {}).get('status') == 'waiting_user']
 
     def digest_now(self):
-        e = self.engine(); items = []
+        e = self.engine(); items = []; texts = []
         for n, a in enumerate(self.pending(), 1):
             try: text = content(e.path(a['path'])) if Path(a['path']).suffix.lower() in TEXT | IMAGE else ''
             except Exception: text = ''
             cands = ', '.join(CAT[c]['name'] for c in self.runs[a['id']].get('candidates') or [] if c in CAT)
             hint = rule_note(Path(a['original']).name, text)[:80] + (f' (후보: {cands})' if cands else '')
-            items.append({'n': n, 'aid': a['id'], 'name': Path(a['original']).name, 'hint': hint})
+            items.append({'n': n, 'aid': a['id'], 'name': Path(a['original']).name, 'hint': hint}); texts.append(text)
         if not items: self.digest = None; return None
         self.digest = {'items': items, 'asked': time.time(), 'proposal': None}
+        if self.ctl is not rule_controller and len(items) >= MIN_FILES:  # look-alike files that fit no folder -> offer one
+            try:
+                docs = [semantic_doc(c) for c in CAT.values()]
+                q = [Path(x['name']).stem + '\n' + t for x, t in zip(items, texts)]
+                sim = [dense_scores(x, q) for x in q]; best = [max(dense_scores(x, docs), default=0) for x in q]
+                prop = propose_folders(self.ctl, items, texts, sim, best, [c['name'] for c in CAT.values()], self.new_root)
+                if prop: self.digest.update(proposal=prop, reply='(에이전트 제안) 비슷한 파일을 새 폴더로 모을까요?', suggested=True)
+            except Exception as exc: print('digest: folder proposal failed:', exc, flush=True)
         self.events.append({'path': f'정리 안 된 파일 {len(items)}개', 'text': '어디에 넣을지 답장해 주세요'}); self.version += 1
         notify(f'정리 안 된 파일 {len(items)}개', '어디에 넣을지 한 줄로 답해 주세요 (localhost 화면)')
         return self.digest
@@ -482,7 +469,6 @@ if __name__ == '__main__':
     ap.add_argument('--qwen', help='HF model dir; omit to use the rule controller')
     ap.add_argument('--adapter', help='LoRA adapter dir for --qwen')
     ap.add_argument('--watch', action='store_true', help='trigger: analyze new files in <root>/downloads and <root>/screenshots')
-    ap.add_argument('--scan-existing-inbox', action='store_true', help='include existing inbox files and persist imported signatures across restarts')
     ap.add_argument('--inbox', action='append', default=[], help='with --watch: copy new files from this folder in (e.g. ~/Desktop for screenshots)')
     ap.add_argument('--digest-hours', type=float, default=0, help='ask about unresolved files every N hours while the user is at the Mac (0 = off; the page also has an "ask now" button)')
     ap.add_argument('--auto-inbox', action='append', default=[], help='like --inbox, but a confident "save to project folder" plan is executed without a click (e.g. the iCloud KCC-inbox for iPhone captures); questions still wait')
@@ -508,7 +494,7 @@ if __name__ == '__main__':
         ctl, name = rule_controller, '규칙 controller (GPU 없이 실행)'
     demo = Demo(a.root, ctl, name); demo.watching = a.watch
     if a.source_rules: demo.rules = Rules(a.source_rules)
-    if a.watch: Watcher(demo, a.inbox, auto_inboxes=a.auto_inbox, strict_inboxes=a.strict_auto_inbox, ask_inboxes=a.ask_inbox, scan_existing=a.scan_existing_inbox).start()
+    if a.watch: Watcher(demo, a.inbox, auto_inboxes=a.auto_inbox, strict_inboxes=a.strict_auto_inbox, ask_inboxes=a.ask_inbox).start()
     if a.projects: demo.projects_path = Path(a.projects)
     if a.expire_installers_days:
         demo.expiry = Expiry(Path(a.root) / 'expiry.json', a.inbox + a.strict_auto_inbox, a.expire_installers_days)

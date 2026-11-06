@@ -196,6 +196,21 @@ class Digest(unittest.TestCase):
         self.assertEqual(h.call('done',{})['unhandled'],[])
         p=h.proposal(); self.assertEqual(list(p['new_projects']),['NEW_1']); self.assertEqual([m['project_id'] for m in p['moves']],['NEW_1','NEW_1','JOB_PREP'])
 
+class NewFolder(unittest.TestCase):
+    def test_groups_only_lookalike_files_that_fit_no_project(self):
+        from digest import group_unknown
+        sim=[[1,.6,.62,.3,.2],[.6,1,.58,.3,.2],[.62,.58,1,.3,.2],[.3,.3,.3,1,.2],[.2,.2,.2,.2,1]]
+        self.assertEqual(group_unknown(sim,[.4,.45,.5,.4,.4]),[[0,1,2]])
+        self.assertEqual(group_unknown(sim,[.4,.7,.5,.4,.4]),[])  # file 1 fits a project: only 2 left, below 3
+    def test_folder_name_is_grounded_and_new(self):
+        from digest import FolderHost
+        h=FolderHost('제어공학 과제 3 옵저버\n제어공학 중간고사',['취준'],'/tmp/x')
+        self.assertIn('error',h.call('propose_folder',{'name':'../etc','purpose':'제어공학 수업 자료'}))
+        self.assertIn('error',h.call('propose_folder',{'name':'주식 리포트','purpose':'제어공학 수업 자료'}))
+        self.assertIn('error',h.call('propose_folder',{'name':'취준','purpose':'취업 준비 자료'}))
+        self.assertEqual(h.call('propose_folder',{'name':'제어공학','purpose':'제어공학 수업 과제와 시험 자료'}),{'status':'ok'})
+        self.assertEqual(h.done['folder'],'/tmp/x/제어공학')
+
 class Docs(unittest.TestCase):
     def test_pptx_text_and_source_rules(self):
         import zipfile
