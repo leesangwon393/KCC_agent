@@ -68,11 +68,12 @@
     .agenda b{font-size:28px;letter-spacing:-.03em}.agenda span{font-size:18px;color:var(--muted)}
 
     /* 3 problem */
-    .problem{display:grid;grid-template-columns:1fr 1fr;gap:56px;margin-top:56px;align-items:center}
-    .problem .quote{font-size:40px;line-height:1.5;font-weight:800;letter-spacing:-.035em;margin:0 0 32px;word-break:keep-all}
+    .problem{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;margin-top:40px;align-items:center}
+    .problem .quote{font-size:40px;line-height:1.5;font-weight:800;letter-spacing:-.035em;margin:0 0 30px;word-break:keep-all}
     .stats{display:grid;grid-template-columns:1fr 1fr;gap:22px}
-    .stat{border-radius:26px;padding:34px 30px;min-height:420px;display:flex;flex-direction:column;justify-content:space-between}
-    .stat small{font-size:16px;font-weight:700;letter-spacing:.08em}.stat b{font-size:60px;white-space:nowrap;letter-spacing:-.04em;font-weight:800;line-height:1}.stat span{font-size:20px;color:#4A505C}
+    .stat{border-radius:26px;padding:28px 30px;min-height:210px;display:flex;flex-direction:column;justify-content:space-between}
+    .stat small{font-size:16px;font-weight:700;letter-spacing:.08em}.stat b{display:block;font-size:56px;white-space:nowrap;letter-spacing:-.04em;font-weight:800;line-height:1;margin-bottom:12px}.stat span{font-size:19px;color:#4A505C}
+    .shots{display:flex;flex-direction:column;gap:20px}.shots .figure{padding:10px;width:fit-content}.shots .figure img{width:470px;border-radius:12px}.shots .figure:nth-child(2) img{width:340px}
 
     /* 4 use cases */
     .cases{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:52px}
@@ -195,14 +196,18 @@
     <div class="problem">
       <div>
         <p class="quote">저장할 때는 목적을 알지만,<br>나중에는 <span class="hl orange">파일 이름만으로</span><br>맥락을 되찾기 어렵다.</p>
-        <p class="note">오른쪽 수치는 팀원 두 기기의 다운로드 폴더 속성에서 확인한 값입니다.<br>전체 사용자를 대표하는 통계는 아닙니다.</p>
+        <div class="stats">
+          <div class="stat blue"><small>MAC · DOWNLOADS</small><div><b>62.93 GB</b><span>44,134 items</span></div></div>
+          <div class="stat peach"><small>MAC · STORAGE</small><div><b>927.4 GB</b><span>of 994.6 GB · 93.2% used</span></div></div>
+        </div>
       </div>
-      <div class="stats">
-        <div class="stat blue"><small>MAC · DOWNLOADS</small><div><b>62.93 GB</b><br><br><span>44,134개 항목</span></div></div>
-        <div class="stat peach"><small>WINDOWS · DOWNLOADS</small><div><b>35.4 GB</b><br><br><span>63,364개 파일</span></div></div>
+      <div class="shots">
+        <figure class="figure"><img src="assets/mac-downloads-info.png" alt="다운로드 폴더 정보: 62.93GB, 44,134개의 항목"></figure>
+        <figure class="figure"><img src="assets/mac-storage.png" alt="저장 용량 93.2% 사용됨, 927.4 GB / 994.6 GB"></figure>
+        <p class="note">발표자 맥에서 캡처한 실제 화면입니다. 전체 사용자를 대표하는 통계는 아닙니다.</p>
       </div>
     </div>
-    <div class="pagefoot">SOURCE · 발표 문서 main 탭의 폴더 속성 수치</div>
+    <div class="pagefoot">SOURCE · 발표자 Mac의 다운로드 폴더 정보 / 저장 용량 화면</div>
   </section>
 
   <section class="slide" data-title="사용자 시나리오">
