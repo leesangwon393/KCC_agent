@@ -1,0 +1,6 @@
+# Separate runtime: web/API dependencies stay small. Qwen3 requires Transformers >=4.51.
+numpy>=1.26,<2
+transformers==4.51.3
+torch==2.6.0; sys_platform != 'darwin' or platform_machine == 'arm64'
+torch==2.2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'
+safetensors>=0.4.3,<1

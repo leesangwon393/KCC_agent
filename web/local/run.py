@@ -79,14 +79,25 @@ def main():
             raise RuntimeError('Web server did not become ready')
         agent = bridge = cloud_bridge = None
         agent_inbox = None
+        agent_projects = None
         cloud_version = None
         while True:
             if children[0].poll() is not None:
                 raise RuntimeError('Web server stopped')
             config = DATA / 'icloud.json'
-            if config.exists():
+            folder_status = DATA / 'folder-setup.json'
+            folders_ready = not folder_status.exists() or json.loads(folder_status.read_text()).get('status') == 'completed'
+            if not folders_ready:
+                for child in (agent, bridge, cloud_bridge):
+                    if child is not None and child.poll() is None:
+                        child.terminate()
+                        child.wait(timeout=10)
+                agent = bridge = cloud_bridge = None
+            if config.exists() and folders_ready:
                 inbox = json.loads(config.read_text())['inbox']
-                if agent is not None and agent.poll() is None and agent_inbox != inbox:
+                projects_path = DATA / 'projects.json'
+                projects_version = projects_path.stat().st_mtime_ns if projects_path.exists() else None
+                if agent is not None and agent.poll() is None and (agent_inbox != inbox or agent_projects != projects_version):
                     agent.terminate()
                     agent.wait(timeout=10)
                 if agent is None or agent.poll() is not None:
@@ -94,6 +105,7 @@ def main():
                         '--root', DATA / 'workspace', '--projects', DATA / 'projects.json',
                         '--watch', '--scan-existing-inbox', '--auto-inbox', inbox, '--port', '8791'])
                     agent_inbox = inbox
+                    agent_projects = projects_version
                 if bridge is None or bridge.poll() is not None:
                     bridge = start('bridge', [REPO / 'web/bridge/mac_bridge.py',
                         '--server', 'http://127.0.0.1:8000', '--allow-insecure-localhost',
