@@ -136,7 +136,7 @@
 
     /* 16 next */
     .next{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:46px}
-    .next .card{min-height:300px}.next h3{display:flex;align-items:center;gap:14px;font-size:30px;letter-spacing:-.03em;margin:0 0 14px}
+    .next .card{min-height:300px}.next .list li{font-size:21px}.next h3{display:flex;align-items:center;gap:14px;font-size:30px;letter-spacing:-.03em;margin:0 0 14px}
     .closing{display:flex;align-items:center;gap:22px;margin-top:40px;font-size:38px;font-weight:800;letter-spacing:-.04em}.closing img{height:64px}
 
     /* controls stay out of the way of the slide footer */
@@ -184,7 +184,7 @@
       <div class="card"><span class="badge mint">03</span><b>파이프라인과 구현</b><span>수집 · 판단 · 승인 · 실행</span></div>
       <div class="card"><span class="badge butter">04</span><b>모델 학습</b><span>학습 데이터 · 손실 추이 · 도구 호출</span></div>
       <div class="card"><span class="badge lav">05</span><b>웹 화면과 시연</b><span>세 파일로 보는 핵심 동작</span></div>
-      <div class="card"><span class="badge blue">06</span><b>한계와 다음 단계</b><span>실제 사용자 파일에서의 검증</span></div>
+      <div class="card"><span class="badge blue">06</span><b>장점과 다음 단계</b><span>로컬 · 애플 연동 · 발전 방향</span></div>
     </div>
     <div class="pagefoot"><img src="assets/favicon.svg" alt="">모아 · KCC 캡스톤 프로젝트</div>
   </section>
@@ -361,10 +361,10 @@
 
   <section class="slide" data-title="다음 단계">
     <div class="kicker">06 / Next</div>
-    <h2 class="title">다음 검증은 실제 사용자 파일에서</h2>
+    <h2 class="title">모아의 장점, 그리고 다음 단계</h2>
     <div class="next">
-      <div class="card" style="background:#FDF1E8"><h3><span class="badge peach">!</span>지금 확인한 한계</h3><ul class="list"><li>수집·합성 자료 중심의 평가</li><li>프로젝트가 많아질 때 성능 저하</li><li>오분류·권한·복구의 지속 검사 필요</li></ul></div>
-      <div class="card" style="background:#EEF8F2"><h3><span class="badge mint">→</span>다음 단계</h3><ul class="list"><li>실제 파일에서 수정 비용 측정</li><li>긴 프로젝트 목록의 후보 검색 개선</li><li>온디바이스 실행과 연결 확대 검토</li></ul></div>
+      <div class="card" style="background:#EEF4FD"><h3><span class="badge blue">✓</span>우리의 장점</h3><ul class="list"><li>원래 쓰던 폴더에 바로 적용 · 새 정리 구조가 필요 없음</li><li>Qwen3-1.7B 로컬 LLM · API 비용 없음, 파일이 맥 밖으로 나가지 않음</li><li>서버가 있으면 더 큰 모델로 바꿔 성능을 높일 수 있는 구조</li><li>애플 연동 활용 · 아이폰 캡처가 iCloud로 맥까지 바로</li></ul></div>
+      <div class="card" style="background:#EEF8F2"><h3><span class="badge mint">→</span>더 발전시킬 점</h3><ul class="list"><li>합성·수집 자료를 넘어 실제 사용자 파일로 평가</li><li>프로젝트가 많아져도 정확하도록 후보 검색 개선</li><li>오분류·권한·복구를 지속적으로 검사</li><li>온디바이스 실행과 연결 범위 확대</li></ul></div>
     </div>
     <div class="closing"><img src="assets/favicon.svg" alt=""><span>다시 정리하고 찾는 일을 줄이는 것, 그게 <span class="hl orange">모아</span>의 목표입니다.</span></div>
     <div class="pagefoot"><img src="assets/favicon.svg" alt="">모아 · KCC 캡스톤 프로젝트</div>
