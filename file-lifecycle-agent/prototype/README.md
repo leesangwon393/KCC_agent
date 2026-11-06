@@ -1,6 +1,26 @@
-# 임시 자료 라이프사이클 관리 — 로컬 실험
+# prototype/
 
-## v2 보강 · 2026-11-02
+에이전트 코드가 있는 폴더입니다. 사용법과 구조는 [상위 README](../README.md)를 보세요.
+
+## 지금 쓰는 파일 (v5)
+
+| 파일 | 역할 |
+|---|---|
+| `demo_v5.py` · `demo_v5.html` | 실행 진입점: 감시기, 웹 화면, 로컬 API, 선택 창 |
+| `agent_v5.py` | 도구 9개, 호스트 가드, 규칙 controller, 문서·OCR 읽기 |
+| `qwen_tool_controller.py` | Qwen native tool calling (LoRA, MPS/CUDA) |
+| `lifecycle_v3.py` | 실행기: 재검증, 무덮어쓰기 이동, 저널, 되돌리기 |
+| `sources.py` · `profile_learn.py` · `digest.py` · `expiry.py` | 페이지 규칙, `_project.md` 학습·캡처 이름, 모아서 물어보기, 설치 파일 정리 |
+| `tasks_v5.py` · `eval_v5.py` · `tool_eval.py` · `real_eval.py` | 평가셋과 평가 |
+| `make_sft.py` · `train_lora.py` · `expand_catalog.py` | 학습 데이터와 LoRA 학습 |
+| `ocr.swift` | macOS Vision OCR (`swiftc -O ocr.swift -o bin/ocr`) |
+| `test_agent_v5.py` | 테스트 26개 |
+
+## 이전 실험 (v1–v3)
+
+아래는 v5 이전 파이프라인 실험 기록입니다. 재현용으로 남겨 둡니다.
+
+### v2 보강 · 2026-11-02
 
 현재 새 실험에는 문맥 추출·원문 검증·행사 식별자 비교를 연결했다. 기존 실패 사례 비교는 v1 2/6 → 로컬 v2 6/6, 추가 PNG 통합 6/6, 기존 파일·상태 시나리오 24/24, 원문 검증·API 경계 오프라인 테스트 16/16이다. 같은 실패를 보고 개선한 회귀 검증으로 일반화 성능은 아니다.
 
@@ -23,11 +43,11 @@ OpenAI Responses 구조화 출력 연결 코드도 추가했다. 기본값은 �
 
 자세한 분석과 그림은 [v2 분석](../deliverables/파이프라인_v2_분석.md)을 참고한다. v2에서도 주최자·행사일이 모두 없는 동명 행사의 구분, 의미상 별칭, 복잡한 표, 수동 필드·묶음 수정, 재처리, OS 알림, 크롤링, 이동 중 강제 종료 복구는 남아 있다.
 
-## v1 실험 재현과 공통 구성
+### v1 실험 재현과 공통 구성
 
 로컬 Vision OCR, Poppler PDF 추출, 명시적 규칙, SQLite 상태 저장을 연결한 실행 가능한 첫 베이스라인이다. 외부 LLM 호출이나 API 키 없이 동작한다. 의미 추출 모델을 붙이기 전에 파일·상태 흐름을 확인하는 목적이다.
 
-## 실행
+### 실행
 
 macOS, Python 3.10 이상, Swift 컴파일러, Poppler가 필요하다. 이번 실행에서는 uv가 선택한 Python 3.14.3과 프로젝트의 `.venv`를 사용했다.
 
@@ -43,7 +63,7 @@ swiftc prototype/ocr.swift -o prototype/bin/ocr
 
 브라우저에서 http://127.0.0.1:8765 를 연다. 서버는 localhost에만 바인딩된다. `Ctrl+C`로 종료한다. 서버를 다시 실행하면 `experiments/latest.json`이 가리키는 마지막 실행의 DB 상태를 불러온다.
 
-## 무엇을 만드나
+### 무엇을 만드나
 
 매 실험마다 `experiments/run_실행시각/` 안에 다운로드·스크린샷·보관 폴더와 SQLite DB, 합성 정답, 실행 전후 스냅샷, 상세 JSON 결과, `결과.md`가 생긴다. 실제 사용자의 다운로드 폴더는 감시하거나 이동하지 않는다.
 
@@ -57,7 +77,7 @@ UI의 `폴더 스캔`으로 실험 폴더를 다시 읽을 수 있다. 별도 �
 .venv/bin/python prototype/app.py watch --root 'experiments/run_실행시각'
 ```
 
-## 현재 한계와 다음 실험
+### 현재 한계와 다음 실험
 
 - 분류·날짜 추출은 규칙 기반이다. 줄바꿈된 날짜, 행동 부정 표현, 복잡한 날짜 충돌에 취약하다.
 - 묶음은 첫 줄 제목 일치에 의존한다. 같은 제목의 다른 행사와 서로 다른 제목의 같은 행사를 구분하지 못한다.
@@ -70,7 +90,7 @@ UI의 `폴더 스캔`으로 실험 폴더를 다시 읽을 수 있다. 별도 �
 
 OCR 구현 참고: [Apple Vision VNRecognizeTextRequest](https://developer.apple.com/documentation/vision/vnrecognizetextrequest).
 
-## v3 프로젝트·관계·상태 실행 기준선
+### v3 프로젝트·관계·상태 실행 기준선
 
 ```sh
 .venv/bin/python prototype/run_v3.py

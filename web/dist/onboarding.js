@@ -76,7 +76,8 @@
   }catch(e){if(tab)tab.close();status.textContent=e.message}finally{button.disabled=false}
  };
  document.getElementById('onboarding-copy-link').onclick=async()=>{try{await navigator.clipboard.writeText(location.origin+'/#onboarding');status.textContent='주소를 복사했어요. Mac Safari에서 열어 주세요.'}catch{status.textContent='Mac에서 열 주소: '+location.origin+'/#onboarding'}};
- document.addEventListener('moa-session',load);
+ document.addEventListener('moa-session',()=>{if(document.getElementById('onboarding').classList.contains('active'))load()});
+ document.addEventListener('moa-page',()=>{if(document.getElementById('onboarding').classList.contains('active'))load()});
  document.addEventListener('click',e=>{if(e.target.closest('[data-page="onboarding"]'))load()});
  setInterval(()=>{if(document.getElementById('onboarding').classList.contains('active'))load()},5000);
  if(document.getElementById('onboarding').classList.contains('active'))load();
