@@ -2,7 +2,9 @@
 (()=>{
  const root=document.getElementById('onboarding-content');
  const standalone=window.matchMedia('(display-mode: standalone)').matches;
- let dockReady=standalone;try{dockReady=dockReady||localStorage.getItem('moa-dock-guide')==='done'}catch{}
+ let dockReady=standalone;
+ // Earlier versions saved this across accounts, hiding setup after an account reset.
+ try{localStorage.removeItem('moa-dock-guide')}catch{}
  let authenticated=false;
  const phone=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
  root.innerHTML=`<div id="onboarding-login" class="note-block" hidden><h2>먼저 모아에 로그인해 주세요</h2><button class="primary" data-page="signup">회원가입</button><button class="ghost" data-login>로그인</button></div>
@@ -53,7 +55,7 @@
   if(name==='confirm_iphone'){await api('onboarding/',{action:name});render(await api('onboarding/',{action:'start_test'}));show('send');}
   else{render(await api('onboarding/',{action:name}));if(name==='start_test')show('send');}
  }catch(e){status.textContent=e.message}finally{busy=false;if(state)render(state)}}
- function dockContinue(){dockReady=true;try{localStorage.setItem('moa-dock-guide','done')}catch{}screen=null;status.textContent='';if(authenticated&&state)render(state);else load()}
+ function dockContinue(){dockReady=true;screen=null;status.textContent='';if(authenticated&&state)render(state);else load()}
  document.getElementById('setup-dock-done').onclick=dockContinue;
  document.getElementById('setup-dock-skip').onclick=dockContinue;
  document.getElementById('setup-begin').onclick=()=>show(state?.mac_connected?'iphone':phone?'phone-first':'mac');
