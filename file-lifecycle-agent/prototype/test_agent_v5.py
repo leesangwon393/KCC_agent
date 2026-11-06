@@ -150,6 +150,25 @@ class Learn(unittest.TestCase):
         self.assertIsNone(Rules(base/'rules.json').match(['lms.example.edu/course/view.php?id=12345']))
         del demo_v5.CAT['POM']
 
+class Caption(unittest.TestCase):
+    def test_user_typed_name_is_read_but_camera_names_are_not(self):
+        from agent_v5 import caption
+        for n in ['IMG_1234.PNG','IMG_0032 2.jpg','스크린샷 2026-11-06 오전 1.23.45.png','Screenshot 2026-11-06 at 1.23.45 PM.png','2026-11-06 01.23.45.png']:
+            self.assertEqual(caption(n),'',n)
+        self.assertEqual(caption('생산운영관리 공지_20261106_012345.png'),'캡션: 생산운영관리 공지\n')
+
+class Expire(unittest.TestCase):
+    def test_installers_go_to_trash_after_days_and_restore(self):
+        import tempfile
+        from expiry import Expiry
+        d=Path(tempfile.mkdtemp());inbox,trash=d/'Downloads',d/'Trash';inbox.mkdir();trash.mkdir()
+        for n in ('app.dmg','Setup_tool.zip','lecture.zip','notes.pdf'):(inbox/n).write_text('x')
+        e=Expiry(d/'exp.json',[inbox],3,trash);self.assertEqual(e.sweep(now=1000),[])
+        self.assertEqual(e.sweep(now=1000+2*86400),[])
+        self.assertEqual(sorted(e.sweep(now=1000+3*86400)),['Setup_tool.zip','app.dmg'])
+        self.assertTrue((inbox/'lecture.zip').exists() and (trash/'app.dmg').exists())
+        e.restore(0);self.assertTrue((inbox/'app.dmg').exists())
+
 class Digest(unittest.TestCase):
     def test_reply_host_validates_and_builds_proposal(self):
         from digest import ReplyHost

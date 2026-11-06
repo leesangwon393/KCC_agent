@@ -8,10 +8,11 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import argparse, json, random, shutil, subprocess, threading, time
 from lifecycle_v3 import Lifecycle
-from agent_v5 import ToolHostV5, run, run_hybrid, rule_controller, DEFAULT_GUARDS, content, TEXT, IMAGE, WEIGHTS, CHUNK, DOCS
+from agent_v5 import ToolHostV5, run, run_hybrid, rule_controller, DEFAULT_GUARDS, content, TEXT, IMAGE, WEIGHTS, CHUNK, DOCS, ToolError
 from sources import where_froms, source_keys, Rules
 from profile_learn import learn, profile_text, rule_note
 from digest import parse_reply, guide, user_active
+from expiry import Expiry
 from tasks_v5 import CATALOG, SHARED, FILLER, INJECT, NOISE_TEXT
 
 HERE = Path(__file__).resolve().parent
@@ -142,6 +143,7 @@ class Demo:
         self.sources_path = self.root / 'sources.json'  # copy path -> download URLs (kMDItemWhereFroms of the original)
         self.sources = json.loads(self.sources_path.read_text()) if self.sources_path.exists() else {}
         self.rules = None  # sources.Rules: page URL -> project, learned from answers and approvals
+        self.expiry = None  # expiry.Expiry: installers to the Trash after N days
 
     def engine(self): return Lifecycle(self.root)
     def save_runs(self): self.runs_path.write_text(json.dumps(self.runs, ensure_ascii=False, indent=1))
@@ -177,7 +179,8 @@ class Demo:
         assets.sort(key=lambda x: x['original'])
         return {'controller': self.name, 'root': str(self.root), 'assets': assets, 'journal': e.data['journal'][-20:],
                 'catalog': [{'id': k, 'name': v['name'], 'desc': v['desc'], 'status': e.data['projects'].get(k)} for k, v in CAT.items()],
-                'digest': self.digest, 'pending': len(self.pending())}
+                'digest': self.digest, 'pending': len(self.pending()),
+                'trashed': [{'i': i, **t} for i, t in enumerate(self.expiry.data['trashed']) if 'restored' not in t][-10:] if self.expiry else []}
 
     def analyze(self, aid):
         e = self.engine(); a = e.data['assets'][aid]
@@ -223,6 +226,14 @@ class Demo:
             self.learn_source(a, a['project'])
             if (self.runs.get(aid) or {}).get('decider') != 'source': self.learn_profile(e, a, a['project'])
         return out
+
+    def expire(self):
+        moved = self.expiry.sweep()
+        if moved:
+            text = f'설치 파일 {len(moved)}개를 휴지통으로 옮겼어요 (화면에서 복구 가능)'
+            self.events.append({'path': ', '.join(moved), 'text': text}); self.events = self.events[-20:]; self.version += 1
+            notify(f'설치 파일 {len(moved)}개 정리', text)
+        return moved
 
     def undo(self, aid):
         self.engine().undo(aid)
@@ -293,7 +304,8 @@ def explain(e, a, r, plan):
     if r.get('decider') == 'source':
         out.append(f'다운로드 출처 {ev} → 이전에 이 페이지 자료를 {a["project"]} 폴더로 정리함 (학습된 출처 규칙)'); ev = None
     if ev:
-        text = content(e.path(a['path'])) if Path(a['path']).suffix.lower() in TEXT | IMAGE else ''
+        try: text = content(e.path(a['path'])) if Path(a['path']).suffix.lower() in TEXT | IMAGE else ''
+        except (OSError, ValueError, ToolError): text = ''  # the user moved or deleted the filed file: the page must still load
         line = next((i for i, l in enumerate(text.splitlines(), 1) if ev in l), None)
         if line:
             pos = text.find(ev); page = pos // CHUNK + 1
@@ -329,14 +341,25 @@ def _brief(r):
     return s if len(s) <= 220 else s[:220] + '…'
 
 
-def serve(demo, port):
+def serve(demo, port, origins=()):
     page = (HERE / 'demo_v5.html').read_bytes()
 
     class H(BaseHTTPRequestHandler):
+        def cors(self):
+            # Only origins listed with --allow-origin may call the API from a browser: the API moves the user's files.
+            o = self.headers.get('Origin')
+            if o and o in origins:
+                self.send_header('Access-Control-Allow-Origin', o); self.send_header('Vary', 'Origin')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type'); self.send_header('Access-Control-Allow-Methods', 'GET, POST')
+                self.send_header('Access-Control-Allow-Private-Network', 'true')  # Chrome: a public page calling localhost
+
         def reply(self, obj, code=200):
             b = json.dumps(obj, ensure_ascii=False).encode()
-            self.send_response(code); self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_response(code); self.send_header('Content-Type', 'application/json; charset=utf-8'); self.cors()
             self.send_header('Content-Length', str(len(b))); self.end_headers(); self.wfile.write(b)
+
+        def do_OPTIONS(self):
+            self.send_response(204 if self.headers.get('Origin') in origins else 403); self.cors(); self.send_header('Content-Length', '0'); self.end_headers()
 
         def do_GET(self):
             if self.path == '/':
@@ -347,6 +370,8 @@ def serve(demo, port):
             else: self.send_error(404)
 
         def do_POST(self):
+            # JSON only: a browser cannot send it cross-origin without the preflight above, so other sites cannot forge calls.
+            if 'application/json' not in (self.headers.get('Content-Type') or ''): return self.reply({'ok': False, 'error': 'Content-Type must be application/json'}, 415)
             try:
                 d = json.loads(self.rfile.read(int(self.headers.get('Content-Length') or 0)) or b'{}')
                 aid = d.get('id')
@@ -357,6 +382,7 @@ def serve(demo, port):
                     elif self.path == '/api/approve': out = demo.approve(aid, d.get('plan'))
                     elif self.path == '/api/undo': out = demo.undo(aid)
                     elif self.path == '/api/digest_now': out = demo.digest_now()
+                    elif self.path == '/api/restore_trashed': out = demo.expiry.restore(int(d.get('i')))
                     elif self.path == '/api/digest_reply': out = demo.digest_reply(str(d.get('text', ''))[:1000])
                     elif self.path == '/api/digest_apply': out = demo.digest_apply()
                     elif self.path == '/api/reset': seed(demo.root); demo.runs = {}; demo.events = []; out = 'reset'
@@ -385,6 +411,8 @@ if __name__ == '__main__':
     ap.add_argument('--strict-auto-inbox', action='append', default=[], help='like --inbox, but documents/screenshots are filed without a click when a download-source rule or the rule controller decided (e.g. ~/Downloads, ~/Desktop)')
     ap.add_argument('--source-rules', help='JSON {page key: project id}; learned from answers/approvals (see sources.py)')
     ap.add_argument('--projects', help="real projects JSON {pid: {name, folder, desc, keywords}} (see build_profiles.py); approved files are filed into each project's folder")
+    ap.add_argument('--expire-installers-days', type=float, default=0, help='move .dmg/.pkg installers in the inboxes to the Trash N days after first seen, by the Mac clock (0 = off)')
+    ap.add_argument('--allow-origin', action='append', default=[], help='web page origin allowed to call the API from a browser, e.g. http://localhost:3000 (repeatable; default: only this page)')
     a = ap.parse_args()
     if a.projects:
         P = json.loads(Path(a.projects).read_text())
@@ -403,6 +431,15 @@ if __name__ == '__main__':
     if a.source_rules: demo.rules = Rules(a.source_rules)
     if a.watch: Watcher(demo, a.inbox, auto_inboxes=a.auto_inbox, strict_inboxes=a.strict_auto_inbox).start()
     if a.projects: demo.projects_path = Path(a.projects)
+    if a.expire_installers_days:
+        demo.expiry = Expiry(Path(a.root) / 'expiry.json', a.inbox + a.strict_auto_inbox, a.expire_installers_days)
+        def sweeper():  # every minute, so a clock moved forward is noticed quickly
+            while True:
+                try:
+                    with demo.lock: demo.expire()
+                except Exception as exc: print('expiry:', exc, flush=True)
+                time.sleep(60)
+        threading.Thread(target=sweeper, daemon=True).start()
     if a.digest_hours:
         def ticker():
             last = time.time()
@@ -413,4 +450,4 @@ if __name__ == '__main__':
                         if demo.pending() and not demo.digest: demo.digest_now()
                     last = time.time()
         threading.Thread(target=ticker, daemon=True).start()
-    serve(demo, a.port)
+    serve(demo, a.port, set(a.allow_origin))
