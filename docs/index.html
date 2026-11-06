@@ -122,7 +122,7 @@
     .train .figure{padding:12px}.train figcaption{font-size:16px;font-weight:700;color:var(--muted);margin:2px 4px 10px}.train img{height:350px;width:100%;object-fit:contain;object-position:left top;border-radius:10px}
 
     /* 12 web */
-    .web{display:grid;grid-template-columns:1.25fr .75fr;gap:40px;margin-top:40px}
+    .web{display:grid;grid-template-columns:1.2fr .8fr;gap:40px;margin-top:40px;align-items:start}
     .browser{border:1px solid #E1DCD4;border-radius:22px;background:#fff;overflow:hidden;box-shadow:0 12px 30px #3b3f4a10}
     .chrome{height:44px;background:#F3EFE8;border-bottom:1px solid #E1DCD4;display:flex;align-items:center;gap:8px;padding:0 18px;font-size:14px;color:var(--muted)}
     .chrome i{width:12px;height:12px;border-radius:50%;background:#E0DBD3}.chrome i:nth-child(1){background:#F3A99B}.chrome i:nth-child(2){background:var(--butter)}.chrome i:nth-child(3){background:var(--mint)}
@@ -131,6 +131,8 @@
     .appstats{display:flex;gap:12px}.appstats span{flex:1;border:1px solid #ECE8E1;border-radius:14px;padding:12px 14px;font-size:14px;color:var(--muted);background:#FBFAF7}.appstats strong{display:block;font-size:26px;color:var(--ink)}
     .file-row{display:grid;grid-template-columns:1.1fr .9fr .55fr;align-items:center;gap:10px;padding:16px 4px;border-bottom:1px solid #EEEAE4;font-size:17px}
     .file-row .tag{font-size:13px;padding:6px 12px;justify-content:center}
+
+    .webfeat{padding:6px 24px;margin-top:14px}.webfeat>div{display:grid;grid-template-columns:12px 132px 1fr;align-items:center;gap:12px;padding:14px 0;border-top:1px solid #EEEAE4;font-size:17px;color:var(--muted)}.webfeat>div:first-child{border-top:0}.webfeat b{font-size:19px;color:var(--ink);white-space:nowrap}.fdot{width:12px;height:12px;border-radius:50%}
 
     /* 16 next */
     .next{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:46px}
@@ -307,38 +309,37 @@
         </div>
       </div>
       <div class="side">
-        <h3>웹에서 하는 일</h3>
-        <p class="note" style="font-size:21px;color:var(--ink)">모델이 제안한 이유를 보고, 사용자가 승인할 파일만 고릅니다.</p>
-        <div class="card"><div class="steps"><div><span class="badge blue">1</span>검토</div><div><span class="badge peach">2</span>승인</div><div><span class="badge mint">3</span>실행</div><div><span class="badge lav">4</span>되돌리기</div></div></div>
+        <h3>웹 페이지 기능</h3>
+        <div class="card webfeat"><div><span class="fdot blue"></span><b>대시보드</b><span>전체 · 검토 대기 · 실행 완료 현황</span></div><div><span class="fdot peach"></span><b>분류 대기</b><span>질문에 답하고 이동 승인</span></div><div><span class="fdot mint"></span><b>모든 파일 · 폴더</b><span>파일 검색, 프로젝트별 보기</span></div><div><span class="fdot butter"></span><b>삭제 관리</b><span>보관 대기 · Mac 휴지통 복구</span></div><div><span class="fdot lav"></span><b>명령 기록</b><span>승인 · 유지 · 되돌리기 내역</span></div><div><span class="fdot blue"></span><b>에이전트 연결</b><span>로그인한 Mac 상태를 5초마다 갱신</span></div></div>
         <p class="note" style="margin-top:18px;font-size:15px">화면은 데모 기능 구조를 요약한 예시입니다.</p>
       </div>
     </div>
     <div class="pagefoot">SOURCE · prototype/demo_v5.html 기능 구조</div>
   </section>
 
-  <section class="slide" data-title="시연 1 · 강의자료">
-    <div class="topline"><span class="kicker">05 / Demo 1 · eCampus 강의자료</span><span class="tag blue">3분 시연</span></div>
-    <h2 class="title">한 번 알려주면, 다음부터는 규칙으로</h2>
-    <div class="figrow">
-      <figure class="figure"><img src="assets/demo2_lecture_download.png" alt="처음 한 번은 폴더를 묻고 _project.md에 기록, 다음부터는 같은 페이지 다운로드를 규칙으로 바로 저장"></figure>
-      <div class="side">
-        <h3>시연 흐름</h3>
-        <div class="steps"><div><span class="badge blue">1</span>기존 과목 폴더 탐색</div><div><span class="badge peach">2</span>어느 폴더인지 질문</div><div><span class="badge mint">3</span>이동 계획 승인</div><div><span class="badge butter">4</span>같은 페이지는 바로 정리</div></div>
-        <p class="note" style="margin-top:26px">시연에서는 현재 구현에서 실제로 작동하는 단계만 실행합니다.</p>
-      </div>
-    </div>
-    <div class="pagefoot">DEMO · 프로젝트 구현 흐름에 맞춘 순서</div>
-  </section>
-
-  <section class="slide" data-title="시연 2 · 아이폰 캡처">
-    <div class="kicker">05 / Demo 2 · KCC 공지 캡처</div>
+  <section class="slide" data-title="시연 1 · 아이폰 캡처">
+    <div class="topline"><span class="kicker">05 / Demo 1 · KCC 공지 캡처</span><span class="tag blue">3분 시연</span></div>
     <h2 class="title">캡처도 읽고, 찾기 쉬운 이름으로</h2>
     <div class="figrow">
       <figure class="figure"><img src="assets/demo1_iphone_capture.png" alt="아이폰 뒷면 두 번 탭 캡처, iCloud 전송, 에이전트가 읽고 이름 짓기, 폴더에 자동 저장"></figure>
       <div class="side">
         <h3>시연 흐름</h3>
         <div class="steps"><div><span class="badge blue">1</span>아이폰에서 캡처</div><div><span class="badge peach">2</span>iCloud로 맥에 도착</div><div><span class="badge mint">3</span>OCR → 캡션 → 파일 이름</div><div><span class="badge butter">4</span>근거 확인 후 폴더 저장</div></div>
-        <p class="note" style="margin-top:26px">분류가 모호하면 근거를 보여주고 사용자가 고릅니다.</p>
+        <p class="note" style="margin-top:26px">분류가 모호하면 근거를 보여주고 사용자가 고릅니다. 시연에서는 현재 구현에서 실제로 작동하는 단계만 실행합니다.</p>
+      </div>
+    </div>
+    <div class="pagefoot">DEMO · 프로젝트 구현 흐름에 맞춘 순서</div>
+  </section>
+
+  <section class="slide" data-title="시연 2 · 강의자료">
+    <div class="kicker">05 / Demo 2 · eCampus 강의자료</div>
+    <h2 class="title">한 번 알려주면, 다음부터는 규칙으로</h2>
+    <div class="figrow">
+      <figure class="figure"><img src="assets/demo2_lecture_download.png" alt="처음 한 번은 폴더를 묻고 _project.md에 기록, 다음부터는 같은 페이지 다운로드를 규칙으로 바로 저장"></figure>
+      <div class="side">
+        <h3>시연 흐름</h3>
+        <div class="steps"><div><span class="badge blue">1</span>기존 과목 폴더 탐색</div><div><span class="badge peach">2</span>어느 폴더인지 질문</div><div><span class="badge mint">3</span>이동 계획 승인</div><div><span class="badge butter">4</span>같은 페이지는 바로 정리</div></div>
+        <p class="note" style="margin-top:26px">처음 한 번 답하면, 같은 페이지 다운로드는 다음부터 바로 정리됩니다.</p>
       </div>
     </div>
     <div class="pagefoot">DEMO · 프로젝트 구현 흐름에 맞춘 순서</div>
