@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """One local supervisor for the web app, file agent and private bridge."""
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -76,21 +77,45 @@ def main():
                 time.sleep(.5)
         else:
             raise RuntimeError('Web server did not become ready')
-        agent = bridge = None
+        agent = bridge = cloud_bridge = None
+        agent_inbox = None
+        cloud_version = None
         while True:
             if children[0].poll() is not None:
                 raise RuntimeError('Web server stopped')
             config = DATA / 'icloud.json'
             if config.exists():
                 inbox = json.loads(config.read_text())['inbox']
+                if agent is not None and agent.poll() is None and agent_inbox != inbox:
+                    agent.terminate()
+                    agent.wait(timeout=10)
                 if agent is None or agent.poll() is not None:
                     agent = start('agent', [REPO / 'file-lifecycle-agent/prototype/demo_v5.py',
                         '--root', DATA / 'workspace', '--projects', DATA / 'projects.json',
-                        '--watch', '--scan-existing-inbox', '--inbox', inbox, '--port', '8791'])
+                        '--watch', '--scan-existing-inbox', '--auto-inbox', inbox, '--port', '8791'])
+                    agent_inbox = inbox
                 if bridge is None or bridge.poll() is not None:
                     bridge = start('bridge', [REPO / 'web/bridge/mac_bridge.py',
                         '--server', 'http://127.0.0.1:8000', '--allow-insecure-localhost',
                         '--state-file', DATA / 'bridge-result.json'], {'MOA_AGENT_TOKEN': token})
+                cloud_file = DATA / 'cloud.json'
+                if cloud_file.exists():
+                    cloud = json.loads(cloud_file.read_text())
+                    version = cloud_file.stat().st_mtime_ns
+                    if cloud_bridge and version != cloud_version and cloud_bridge.poll() is None:
+                        cloud_bridge.terminate()
+                        cloud_bridge.wait(timeout=10)
+                    if cloud_bridge is None or cloud_bridge.poll() is not None:
+                        cloud_bridge = start('cloud-bridge', [REPO / 'web/bridge/mac_bridge.py',
+                            '--server', cloud['origin'], '--state-file', DATA / ('cloud-bridge-result-' + hashlib.sha256(cloud['bridge_token'].encode()).hexdigest()[:16] + '.json')],
+                            {'MOA_AGENT_TOKEN': cloud['bridge_token']})
+                        cloud_version = version
+                elif cloud_bridge is not None:
+                    if cloud_bridge.poll() is None:
+                        cloud_bridge.terminate()
+                        cloud_bridge.wait(timeout=10)
+                    cloud_bridge = None
+                    cloud_version = None
             time.sleep(3)
     finally:
         stop()

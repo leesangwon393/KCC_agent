@@ -56,7 +56,7 @@ function digest(){
  let h=`<b>이 파일들은 어디에 넣을까요?</b><ol>${it}</ol>`;
  if(!d.proposal)h+=`<div class="bar"><input id="dtext" style="flex:1;border:1px solid #ccd4e2;border-radius:8px;padding:7px 10px;font:inherit" placeholder="예: 1,2는 강화학습 수업 폴더 새로 만들어서 넣고 3은 취준, 나머지는 그냥 둬"><button class="primary" id="dsend">답장</button></div>`;
  else{const P=d.proposal,nm=id=>P.new_projects[id]?`새 폴더 ${P.new_projects[id].name}`:name(id);
-  h+=`<div class="ev"><b>답장:</b> ${esc(d.reply)}</div><b>에이전트가 이렇게 정리할게요</b><ul>`+
+  h+=`<div class="ev"><b>${d.suggested?'제안':'답장'}:</b> ${esc(d.reply)}</div><b>에이전트가 이렇게 정리할게요</b><ul>`+
    Object.values(P.new_projects).map(c=>`<li>📁 새 프로젝트 폴더 <code>${esc(c.folder)}</code> + 에이전트 지침(_project.md): ${esc(c.desc)}</li>`).join('')+
    P.moves.map(m=>`<li>${m.n}. ${esc(m.name)} → <b>${esc(nm(m.project_id))}</b></li>`).join('')+
    P.leave.map(m=>`<li>${m.n}. ${esc(m.name)} → 그대로 두기</li>`).join('')+`</ul>`+

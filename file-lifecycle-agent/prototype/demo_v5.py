@@ -8,10 +8,10 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import argparse, json, random, shutil, subprocess, threading, time
 from lifecycle_v3 import Lifecycle
-from agent_v5 import ToolHostV5, run, run_hybrid, rule_controller, DEFAULT_GUARDS, content, caption, TEXT, IMAGE, WEIGHTS, CHUNK, DOCS, ToolError
+from agent_v5 import ToolHostV5, run, run_hybrid, rule_controller, DEFAULT_GUARDS, content, caption, TEXT, IMAGE, WEIGHTS, CHUNK, DOCS, ToolError, semantic_doc, dense_scores
 from sources import where_froms, source_keys, Rules
 from profile_learn import learn, profile_text, rule_note, make_caption
-from digest import parse_reply, guide, user_active
+from digest import parse_reply, guide, user_active, propose_folders, MIN_FILES
 from expiry import Expiry
 from tasks_v5 import CATALOG, SHARED, FILLER, INJECT, NOISE_TEXT
 
@@ -107,33 +107,16 @@ class Watcher(threading.Thread):
         self.auto = set(); self.strict = set()
         self.inboxes = list(dict.fromkeys([Path(x).expanduser() for x in inboxes] + sorted(self.auto_inboxes) + sorted(self.strict_inboxes)))
         self.sizes = {}; self.fetching = set()
-        self.inbox_log = self.d.root / 'inbox-seen.json' if scan_existing else None
-        try: self.inbox_seen = json.loads(self.inbox_log.read_text()) if self.inbox_log and self.inbox_log.exists() else {}
-        except (ValueError, OSError): self.inbox_seen = {}
-        self.seen = set()
-        for x in self.inboxes:
-            for p in x.glob('*'):
-                try:
-                    if not scan_existing or self.inbox_seen.get(str(p)) == self.signature(p): self.seen.add(p)
-                except OSError: pass
-
-    @staticmethod
-    def signature(path):
-        st = path.stat()
-        return [st.st_size, st.st_mtime_ns]
-
-    def remember(self, path):
-        self.seen.add(path)
-        if self.inbox_log:
-            self.inbox_seen[str(path)] = self.signature(path)
-            tmp = self.inbox_log.with_suffix('.tmp')
-            tmp.write_text(json.dumps(self.inbox_seen, ensure_ascii=False))
-            tmp.replace(self.inbox_log)
+        self.scan_existing = scan_existing
+        self.seen_file = Path(self.d.root) / 'inbox-seen.json'
+        try: self.seen_fingerprints = json.loads(self.seen_file.read_text()) if scan_existing else {}
+        except (OSError, ValueError): self.seen_fingerprints = {}
+        self.seen = set() if scan_existing else {p for x in self.inboxes for p in x.glob('*')}
 
     def candidates(self):
         for x in self.inboxes:
             for p in x.glob('*'):
-                if p not in self.seen and p.is_file() and not p.name.startswith(('.', '~$')) and p.suffix.lower() in TEXT | IMAGE | WEIGHTS:
+                if p not in self.seen and p.is_file() and not p.name.startswith(('.', '~$')) and p.suffix.lower() in TEXT | IMAGE | WEIGHTS and (not self.scan_existing or self.seen_fingerprints.get(str(p)) != self.fingerprint(p)):
                     yield p, self.d.root / 'screenshots' / p.name
         for sub in WATCH_DIRS:
             for p in (self.d.root / sub).glob('*'):
@@ -143,6 +126,18 @@ class Watcher(threading.Thread):
         # Wait until the size stops changing (downloads and screenshots are written in pieces).
         n = p.stat().st_size; prev = self.sizes.get(p); self.sizes[p] = n
         return prev == n and n > 0 and p.suffix.lower() not in PARTIAL
+
+    def fingerprint(self, p):
+        stat = p.stat()
+        return [stat.st_size, stat.st_mtime_ns]
+
+    def remember(self, p):
+        self.seen.add(p)
+        if self.scan_existing:
+            self.seen_fingerprints[str(p)] = self.fingerprint(p)
+            tmp = self.seen_file.with_suffix('.tmp')
+            tmp.write_text(json.dumps(self.seen_fingerprints), encoding='utf-8')
+            tmp.replace(self.seen_file)
 
     def rename(self, p):
         try: cap = make_caption(None if self.d.ctl is rule_controller else self.d.ctl, content(p))
@@ -163,7 +158,7 @@ class Watcher(threading.Thread):
         for p, copy_to in list(self.candidates()):
             if not self.stable(p): continue
             if copy_to:
-                if p.stat().st_size > 50 << 20: self.seen.add(p); continue  # shortcut: skips >50MB
+                if p.stat().st_size > 50 << 20: self.remember(p); continue  # shortcut: skips >50MB
                 if copy_to.exists(): copy_to = copy_to.with_stem(f'{copy_to.stem}_{time.strftime("%Y%m%d_%H%M%S")}')  # iPhone names repeat
                 copy_to.parent.mkdir(exist_ok=True)
                 try: shutil.copy2(p, copy_to)
@@ -326,15 +321,23 @@ class Demo:
                 and a['path'] == a['original'] and (self.runs.get(a['id']) or {}).get('status') == 'waiting_user']
 
     def digest_now(self):
-        e = self.engine(); items = []
+        e = self.engine(); items = []; texts = []
         for n, a in enumerate(self.pending(), 1):
             try: text = content(e.path(a['path'])) if Path(a['path']).suffix.lower() in TEXT | IMAGE else ''
             except Exception: text = ''
             cands = ', '.join(CAT[c]['name'] for c in self.runs[a['id']].get('candidates') or [] if c in CAT)
             hint = rule_note(Path(a['original']).name, text)[:80] + (f' (후보: {cands})' if cands else '')
-            items.append({'n': n, 'aid': a['id'], 'name': Path(a['original']).name, 'hint': hint})
+            items.append({'n': n, 'aid': a['id'], 'name': Path(a['original']).name, 'hint': hint}); texts.append(text)
         if not items: self.digest = None; return None
         self.digest = {'items': items, 'asked': time.time(), 'proposal': None}
+        if self.ctl is not rule_controller and len(items) >= MIN_FILES:  # look-alike files that fit no folder -> offer one
+            try:
+                docs = [semantic_doc(c) for c in CAT.values()]
+                q = [Path(x['name']).stem + '\n' + t for x, t in zip(items, texts)]
+                sim = [dense_scores(x, q) for x in q]; best = [max(dense_scores(x, docs), default=0) for x in q]
+                prop = propose_folders(self.ctl, items, texts, sim, best, [c['name'] for c in CAT.values()], self.new_root)
+                if prop: self.digest.update(proposal=prop, reply='(에이전트 제안) 비슷한 파일을 새 폴더로 모을까요?', suggested=True)
+            except Exception as exc: print('digest: folder proposal failed:', exc, flush=True)
         self.events.append({'path': f'정리 안 된 파일 {len(items)}개', 'text': '어디에 넣을지 답장해 주세요'}); self.version += 1
         notify(f'정리 안 된 파일 {len(items)}개', '어디에 넣을지 한 줄로 답해 주세요 (localhost 화면)')
         return self.digest
@@ -482,8 +485,8 @@ if __name__ == '__main__':
     ap.add_argument('--qwen', help='HF model dir; omit to use the rule controller')
     ap.add_argument('--adapter', help='LoRA adapter dir for --qwen')
     ap.add_argument('--watch', action='store_true', help='trigger: analyze new files in <root>/downloads and <root>/screenshots')
-    ap.add_argument('--scan-existing-inbox', action='store_true', help='include existing inbox files and persist imported signatures across restarts')
     ap.add_argument('--inbox', action='append', default=[], help='with --watch: copy new files from this folder in (e.g. ~/Desktop for screenshots)')
+    ap.add_argument('--scan-existing-inbox', action='store_true', help='collect iCloud files received while the agent was offline, remembering processed file versions')
     ap.add_argument('--digest-hours', type=float, default=0, help='ask about unresolved files every N hours while the user is at the Mac (0 = off; the page also has an "ask now" button)')
     ap.add_argument('--auto-inbox', action='append', default=[], help='like --inbox, but a confident "save to project folder" plan is executed without a click (e.g. the iCloud KCC-inbox for iPhone captures); questions still wait')
     ap.add_argument('--strict-auto-inbox', action='append', default=[], help='like --inbox, but documents/screenshots are filed without a click when a download-source rule or the rule controller decided (e.g. ~/Downloads, ~/Desktop)')

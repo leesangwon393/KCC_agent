@@ -19,9 +19,17 @@ from .models import AgentCommand, AgentLink
 
 @ensure_csrf_cookie
 def session(request):
-    return JsonResponse({"authenticated": request.user.is_authenticated,
-                         "username": request.user.get_username() if request.user.is_authenticated else None,
-                         "csrf": get_token(request)})
+    authenticated = request.user.is_authenticated
+    display_name = ''
+    if authenticated:
+        display_name = 'Apple 계정' if hasattr(request.user, 'appleidentity') else request.user.first_name or request.user.get_username()
+    completed = bool(authenticated and hasattr(request.user, 'onboardingprogress') and request.user.onboardingprogress.completed_at)
+    response = JsonResponse({"authenticated": authenticated,
+                             "username": request.user.get_username() if authenticated else None,
+                             "display_name": display_name, "onboarding_completed": completed,
+                             "csrf": get_token(request)})
+    response['Cache-Control'] = 'no-store'
+    return response
 
 
 @csrf_protect
@@ -32,9 +40,17 @@ def sign_in(request):
         body = json.loads(request.body)
     except (ValueError, UnicodeDecodeError):
         return JsonResponse({"detail": "Invalid JSON"}, status=400)
-    user = authenticate(request, username=body.get("username"), password=body.get("password"))
+    if not isinstance(body, dict) or not isinstance(body.get("username"), str) or not isinstance(body.get("password"), str):
+        return JsonResponse({"detail": "아이디와 비밀번호를 입력하세요."}, status=400)
+    username = body["username"].strip()
+    password = body["password"]
+    if len(username) > 150 or len(password) > 1024:
+        return JsonResponse({"detail": "로그인 정보가 올바르지 않습니다."}, status=400)
+    user = authenticate(request, username=username, password=password)
+    if user is None and username != username.lower():
+        user = authenticate(request, username=username.lower(), password=password)
     if user is None or not user.is_active:
-        return JsonResponse({"detail": "Invalid credentials"}, status=401)
+        return JsonResponse({"detail": "아이디 또는 비밀번호가 올바르지 않습니다."}, status=401)
     login(request, user)
     return JsonResponse({"authenticated": True, "username": user.get_username()})
 

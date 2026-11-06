@@ -12,4 +12,4 @@ if [[ ! -x .venv-moa/bin/python ]]; then
   "$MOA_TOOLS/bin/uv" venv --python 3.12 .venv-moa
 fi
 "$MOA_TOOLS/bin/uv" pip install --python .venv-moa/bin/python -r web/backend/requirements.txt
-.venv-moa/bin/python web/local/install.py
+.venv-moa/bin/python web/local/install.py --helper-only
