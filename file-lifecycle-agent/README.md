@@ -214,8 +214,11 @@ python prototype/demo_v5.py --watch --inbox ~/Desktop    # 바탕화면 새 스�
 python prototype/demo_v5.py --root <작업폴더> --projects <projects.json> --watch \
   --strict-auto-inbox ~/Downloads --strict-auto-inbox ~/Desktop \
   --auto-inbox "~/Library/Mobile Documents/com~apple~CloudDocs/KCC-inbox" \
-  --source-rules <source_rules.json> --qwen <Qwen3-1.7B> --adapter <LoRA> --digest-hours 5
+  --source-rules <source_rules.json> --qwen <Qwen3-1.7B> --adapter <LoRA> --digest-hours 5 \
+  --expire-installers-days 3 [--allow-origin <웹 origin>]
 ```
+
+웹에서 이 에이전트를 부르는 방법(엔드포인트, 응답 형식, `web/INTEGRATION.md`와의 대응)은 [`docs/local_api.md`](docs/local_api.md)에 있습니다.
 
 | 입력 | 자동 저장 조건 | 그 외 |
 |---|---|---|
@@ -228,6 +231,10 @@ python prototype/demo_v5.py --root <작업폴더> --projects <projects.json> --w
 - **모아서 물어보기** (`digest.py`): N시간마다(맥 사용 중일 때만) 미해결 파일을 번호로 보여 주고, 자연어 답장을 Qwen이 `create_project/assign_files/leave_files/done`으로 해석합니다. 미리보기 확인 후 새 폴더와 에이전트 지침(`_project.md`)을 만들고 파일을 옮깁니다.
 - 규칙 controller 수정: 읽기 한도를 호스트 가드와 같은 5청크로 맞추고(이전엔 4청크라 반복 호출), 끝부분 검색이 애매하면 문서 앞부분(제목)으로 한 번 더 검색합니다. 근거 인용이 거부되면 반복하지 않고 묻습니다.
   - held-out 66건(규칙): 43 → **44**, 75건 전체 47 → **50**, 잘못 지정 1 그대로.
+- **승인도 학습** (2026-11-06): "승인하고 저장"을 눌러도 그 폴더 `_project.md`에 메모를 한 줄 덧붙입니다. 출처 규칙으로 정해진 파일은 제외하고, 파일당 한 번만 적습니다. **되돌리기**를 누르면 그 승인이나 답변으로 배운 페이지 규칙을 지웁니다(`Rules.forget`).
+- **설치 파일 정리** (`expiry.py`, `--expire-installers-days N`): 감시 폴더의 `.dmg`, `.pkg`, setup/install `.zip`·`.exe`를 처음 본 뒤 N일이 지나면 휴지통(`~/.Trash`)으로 옮깁니다. 지우지 않고 옮기며, 화면에서 복구할 수 있습니다. 기준은 맥 시계라서, 시계를 N일 앞으로 돌리면 1분 안에 동작합니다(시연용). 처음 실행할 때 이미 있던 파일도 그 시점부터 셉니다.
+- **캡처 캡션** (`agent_v5.caption`): 이미지 파일 이름이 사용자가 쓴 글이면(예: 아이폰 단축어에서 입력한 "생산운영관리 공지") OCR 앞에 `캡션: ...` 한 줄로 붙여 읽습니다. `IMG_1234`, `스크린샷 2026-…`처럼 기기가 붙인 이름은 무시합니다.
+- **웹 연결 준비**: `--allow-origin`으로 허용한 웹 페이지만 브라우저에서 API를 부를 수 있습니다(CORS, Chrome 사설망 헤더 포함). POST는 JSON만 받아서 다른 사이트의 폼 위조를 막습니다. 옮겨진 파일을 사용자가 지우거나 옮겨도 화면이 멈추지 않게 고쳤습니다.
 - 학습 곡선: `sft/plot_training_pretty.py` → `results/figures/training_loss.png` (검증 손실은 기록하지 않았음).
 
 ## 실행

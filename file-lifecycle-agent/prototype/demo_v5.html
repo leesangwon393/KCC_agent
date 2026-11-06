@@ -22,6 +22,7 @@ code{font-size:12px;background:#f1f5f9;padding:1px 4px;border-radius:4px}@media(
 <div class="bar"><button class="primary" id="all">전체 분석</button><button id="bulk">보관 권장 일괄 승인</button><button id="reset" class="danger">데모 폴더 초기화</button><span class="sub" id="root"></span></div>
 <div class="stats" id="stats"></div>
 <div class="panel" id="digest" style="margin-bottom:14px"></div>
+<div class="panel" id="trashed" style="margin-bottom:14px;display:none"></div>
 <div class="bar"><input id="q" placeholder="파일명·프로젝트 검색" aria-label="파일명 또는 프로젝트 검색"><span class="sub" id="dist"></span></div>
 <div class="grid"><div id="cards"></div>
 <aside><div class="panel"><b>프로젝트</b><table id="cat"></table></div><div class="panel" style="margin-top:12px"><b>실행 기록 (저널)</b><table id="journal"></table></div></aside></div>
@@ -42,9 +43,12 @@ function render(){
  $('#ctl').textContent='CONTROLLER · '+S.controller;$('#root').textContent='폴더: '+S.root;
  $('#cat').innerHTML=S.catalog.map(c=>`<tr><td><b>${esc(c.id)}</b><br><span class="sub">${esc(c.name)}</span></td><td><span class="tag ${c.status==='completed'?'archive':'keep'}">${c.status==='completed'?'완료':'진행 중'}</span></td></tr>`).join('');
  $('#journal').innerHTML=S.journal.slice().reverse().map(j=>`<tr><td>${esc(j.src)} → ${esc(j.dst)}</td><td>${esc(JS[j.state]||j.state)}</td></tr>`).join('')||'<tr><td class="sub" colspan="2" style="text-align:left">아직 이동 없음</td></tr>';
- digest();
+ digest(); trashed();
  $('#cards').innerHTML=S.assets.filter(a=>(F==='all'||bucket(a)===F)&&(!q||(a.original+' '+(a.project||'')).toLowerCase().includes(q))).map(card).join('')||'<p class="sub">조건에 맞는 파일이 없습니다.</p>';
 }
+function trashed(){const t=S.trashed||[],el=$('#trashed');el.style.display=t.length?'':'none';
+ el.innerHTML=`<b>휴지통으로 옮긴 설치 파일</b><table>${t.map(x=>`<tr><td>${esc(x.path.split('/').pop())}</td><td><button data-i="${x.i}">복구</button></td></tr>`).join('')}</table>`}
+$('#trashed').onclick=async e=>{const i=e.target.dataset.i;if(i===undefined)return;try{await post('/api/restore_trashed',{i:+i});msg('복구했어요');await load()}catch(err){msg(err.message)}};
 function digest(){
  const d=S.digest,el=$('#digest');
  if(!d){el.innerHTML=`<b>모아서 물어보기</b> <span class="sub">확인이 필요한 파일 ${S.pending}개</span> <button id="dnow" ${S.pending?'':'disabled'}>지금 물어보기</button>`;return}
