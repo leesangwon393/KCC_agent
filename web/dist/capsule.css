@@ -458,3 +458,6 @@ body, button, input, select, textarea,
 .login-prompt button { flex-shrink: 0; }
 @media (hover:hover) and (pointer:fine) { .login-modal-close:hover { background: #edf1e5; color: #3d4d36; } }
 @media (max-width:760px) { .login-modal .agent-login { padding: 38px 24px 26px; } .login-prompt { flex-wrap: wrap; } }
+
+.media-row article > a { display: inline-block; margin-top: 18px; color: #4b5f40; font-size: 12px; font-weight: 600; text-decoration: none; }
+.media-row article > a:hover { text-decoration: underline; }
