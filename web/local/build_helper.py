@@ -81,7 +81,8 @@ def build(origin='https://3.38.192.19'):
         info = {'CFBundleExecutable': 'MoaHelper', 'CFBundleIdentifier': 'com.moa.helper',
                 'CFBundleName': '모아 연결', 'CFBundleDisplayName': '모아 연결', 'CFBundlePackageType': 'APPL',
                 'CFBundleShortVersionString': '0.1.0', 'LSMinimumSystemVersion': '14.0',
-                'NSHighResolutionCapable': True, 'MoaOrigin': origin, 'MoaSourceSHA256': digest,
+                'NSHighResolutionCapable': True, 'NSAppTransportSecurity': {'NSAllowsLocalNetworking': True},
+                'MoaOrigin': origin, 'MoaSourceSHA256': digest,
                 'CFBundleURLTypes': [{'CFBundleURLName': 'com.moa.helper.connect', 'CFBundleURLSchemes': ['moa-helper']} ]}
         (app / 'Contents/Info.plist').write_bytes(plistlib.dumps(info))
         universal(ROOT / 'web/local/HelperLauncher.swift', binary, ['Cocoa'])

@@ -66,12 +66,12 @@
   if(phone){show('phone-first');return;}
   const button=e.currentTarget;button.disabled=true;status.textContent='';
   try{
-   const ticket=await api('agent/pairing/',{});const link=document.createElement('a');link.className='primary';link.textContent='모아 연결 앱 다시 열기';
+   const ticket=await api('agent/pairing/',{});const link=document.createElement('a');link.className='primary';link.textContent='연결 앱 다시 열기';
    link.href='moa-helper://connect?ticket='+encodeURIComponent(ticket.pairing_secret);
    document.getElementById('onboarding-pair-link').replaceChildren(link);
-   document.getElementById('setup-mac-wait').textContent='앱 열기 확인이 나오면 허용해 주세요. 준비 후 연결 승인 화면이 자동으로 열립니다.';
+   document.getElementById('setup-mac-wait').textContent='macOS에서 앱 열기를 허용하고, 연결 앱 창에서 승인해 주세요. Safari 창은 열리지 않습니다.';
    window.location.href=link.href;
-   setTimeout(()=>{link.removeAttribute('href');link.textContent='연결 요청이 만료됐어요. 연결 버튼을 다시 눌러 주세요.'},300000);
+   setTimeout(()=>{link.removeAttribute('href');link.textContent='연결 요청이 만료됐어요. 위 버튼을 다시 눌러 주세요.'},300000);
   }catch(e){status.textContent=e.message}finally{button.disabled=false}
  };
  document.getElementById('onboarding-copy-link').onclick=async()=>{try{await navigator.clipboard.writeText(location.origin+'/#onboarding');status.textContent='주소를 복사했어요. Mac Safari에서 열어 주세요.'}catch{status.textContent='Mac에서 열 주소: '+location.origin+'/#onboarding'}};
