@@ -8,9 +8,9 @@ from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import argparse, json, random, shutil, subprocess, threading, time
 from lifecycle_v3 import Lifecycle
-from agent_v5 import ToolHostV5, run, run_hybrid, rule_controller, DEFAULT_GUARDS, content, TEXT, IMAGE, WEIGHTS, CHUNK, DOCS, ToolError
+from agent_v5 import ToolHostV5, run, run_hybrid, rule_controller, DEFAULT_GUARDS, content, caption, TEXT, IMAGE, WEIGHTS, CHUNK, DOCS, ToolError
 from sources import where_froms, source_keys, Rules
-from profile_learn import learn, profile_text, rule_note
+from profile_learn import learn, profile_text, rule_note, make_caption
 from digest import parse_reply, guide, user_active
 from expiry import Expiry
 from tasks_v5 import CATALOG, SHARED, FILLER, INJECT, NOISE_TEXT
@@ -123,6 +123,19 @@ class Watcher(threading.Thread):
         n = p.stat().st_size; prev = self.sizes.get(p); self.sizes[p] = n
         return prev == n and n > 0 and p.suffix.lower() not in PARTIAL
 
+    def rename(self, p):
+        try: cap = make_caption(None if self.d.ctl is rule_controller else self.d.ctl, content(p))
+        except (ToolError, OSError) as exc: print('watcher: caption failed:', p.name, exc, flush=True); cap = None
+        if cap:
+            new = p.with_name(cap + p.suffix)
+            if new.exists(): new = new.with_stem(f'{new.stem}_{time.strftime("%Y%m%d_%H%M%S")}')
+            p.rename(new); old = str(p.relative_to(self.d.root))
+            for s in (self.auto, self.strict, self.ask):
+                if p in s: s.discard(p); s.add(new)
+            if old in self.d.sources: self.d.sources[str(new.relative_to(self.d.root))] = self.d.sources.pop(old); self.d.save_sources()
+            p = new
+        return p, str(p.relative_to(self.d.root))
+
     def tick(self):
         known = {a['original'] for a in self.d.engine().data['assets'].values()}
         for p, copy_to in list(self.candidates()):
@@ -143,6 +156,8 @@ class Watcher(threading.Thread):
             rel = str(p.relative_to(self.d.root))
             if rel in known: continue
             with self.d.lock:
+                if p.suffix.lower() in IMAGE and p.parent.name == 'screenshots' and not caption(p):
+                    p, rel = self.rename(p)  # 'IMG_1234.png' -> 'KCC 대회 공지.png', named by the agent from the OCR text
                 aid = self.d.engine().ingest(rel)
                 try: r = self.d.analyze(aid); r['trigger'] = 'watch'; self.d.save_runs()
                 except Exception as exc: r = {'status': f'error: {exc}', 'project': None}
