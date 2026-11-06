@@ -81,10 +81,13 @@
     .cases h3{font-size:31px;letter-spacing:-.03em;margin:8px 0 0}.cases p{font-size:21px;line-height:1.6;color:var(--muted);margin:0;word-break:keep-all}.cases .tag{margin-top:auto;align-self:flex-start}
 
     /* 5 landscape */
-    .compare{display:grid;grid-template-columns:1fr 1.25fr 1.25fr;margin-top:48px;border:1px solid #E1DCD4;border-radius:24px;overflow:hidden;background:var(--card)}
-    .compare>div{padding:24px 30px;font-size:22px;border-top:1px solid #ECE8E1;display:flex;align-items:center;min-height:92px}
-    .compare>div:nth-child(3n+1){font-weight:800}
-    .compare .head{border-top:0;background:#F3EFE8;font-size:16px;font-weight:700;letter-spacing:.08em;color:var(--muted);min-height:62px}
+    .compare{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px}
+    .compare .card{display:flex;flex-direction:column;gap:10px;min-height:340px}
+    .compare .tag{align-self:flex-start;font-size:20px;padding:10px 20px;margin-bottom:14px}
+    .compare small{font-size:15px;font-weight:700;letter-spacing:.06em;color:#8A8F99}
+    .compare p{font-size:23px;line-height:1.5;margin:0;word-break:keep-all}
+    .compare .q{margin-top:auto;padding-top:22px;border-top:1px dashed #DDD7CE;display:flex;flex-direction:column;gap:10px}
+    .compare .q b{font-size:25px;letter-spacing:-.02em;word-break:keep-all}
     .hypo{display:flex;align-items:center;gap:18px;margin-top:36px;font-size:25px;font-weight:700;word-break:keep-all}
 
     /* 6 statement */
@@ -224,10 +227,9 @@
     <div class="kicker">02 / Landscape</div>
     <h2 class="title">자동 분류만으로는 충분하지 않다</h2>
     <div class="compare">
-      <div class="head">PROJECT</div><div class="head">이미 가능한 것</div><div class="head">남는 질문</div>
-      <div>organize</div><div>규칙·날짜·본문에 따른 분류</div><div>규칙 밖의 작업 맥락은?</div>
-      <div>AI File Sorter</div><div>LLM 분류·검토·되돌리기</div><div>파일과 프로젝트의 관계는?</div>
-      <div>Local File Organizer</div><div>요약·링크 기반 정리 뷰</div><div>실제 이동과 실행 책임은?</div>
+      <article class="card"><span class="tag blue">organize</span><small>이미 가능한 것</small><p>규칙·날짜·본문에 따른 분류</p><div class="q"><small>남는 질문</small><b>규칙 밖의 작업 맥락은?</b></div></article>
+      <article class="card"><span class="tag peach">AI File Sorter</span><small>이미 가능한 것</small><p>LLM 분류·검토·되돌리기</p><div class="q"><small>남는 질문</small><b>파일과 프로젝트의 관계는?</b></div></article>
+      <article class="card"><span class="tag mint">Local File Organizer</span><small>이미 가능한 것</small><p>요약·링크 기반 정리 뷰</p><div class="q"><small>남는 질문</small><b>실제 이동과 실행 책임은?</b></div></article>
     </div>
     <p class="hypo"><span class="tag butter">검증 가설</span>파일을 작업 맥락에 연결하면서, 필요한 관계를 지킨 채 정리할 수 있는가?</p>
     <div class="pagefoot">SOURCE · 프로젝트 선행연구 조사</div>
